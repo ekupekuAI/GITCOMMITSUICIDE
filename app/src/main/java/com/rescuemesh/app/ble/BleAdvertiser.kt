@@ -29,24 +29,32 @@ class BleAdvertiser(
 
     @SuppressLint("MissingPermission")
     fun start() {
-        if (callback != null) return
+        Log.d("BLE_ADV", "Start requested. Current state: ${_state.value}")
+        if (callback != null) {
+            Log.d("BLE_ADV", "Already advertising, ignoring start")
+            return
+        }
 
         val currentAdapter = adapter
         val currentAdvertiser = advertiser
         when {
             currentAdapter == null -> {
+                Log.e("BLE_ADV", "Start failed: Bluetooth adapter unavailable")
                 _state.value = AdvertiserState.Unavailable("Bluetooth adapter unavailable")
                 return
             }
             !currentAdapter.isEnabled -> {
+                Log.e("BLE_ADV", "Start failed: Bluetooth is off")
                 _state.value = AdvertiserState.Unavailable("Bluetooth is off")
                 return
             }
             currentAdvertiser == null -> {
+                Log.e("BLE_ADV", "Start failed: BLE advertising unsupported")
                 _state.value = AdvertiserState.Unavailable("BLE advertising unsupported")
                 return
             }
             !hasAdvertisePermission() -> {
+                Log.e("BLE_ADV", "Start failed: Permission missing")
                 _state.value = AdvertiserState.PermissionMissing
                 return
             }
@@ -64,32 +72,43 @@ class BleAdvertiser(
             .build()
 
         val scanResponse = AdvertiseData.Builder()
-            .setIncludeDeviceName(false)
-            .addServiceData(BleConstants.MeshServiceParcelUuid, BleConstants.LOCAL_NAME.encodeToByteArray())
+            .setIncludeDeviceName(true)
+            .addManufacturerData(0xFFFF, byteArrayOf(0xDE.toByte(), 0xAD.toByte()))
             .build()
 
         val advertiseCallback = object : AdvertiseCallback() {
             override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
-                Log.i("BLE", "Advertising started")
+                Log.i("BLE_ADV", "Advertising started successfully. Settings: $settingsInEffect")
                 _state.value = AdvertiserState.Advertising
             }
 
             override fun onStartFailure(errorCode: Int) {
                 callback = null
-                Log.w("BLE", "Advertising failed: $errorCode")
-                _state.value = AdvertiserState.Failed("Advertise failed: $errorCode")
+                Log.e("BLE_ADV", "Advertising failed to start. Error code: $errorCode")
+                val reason = when (errorCode) {
+                    ADVERTISE_FAILED_ALREADY_STARTED -> "Already started"
+                    ADVERTISE_FAILED_DATA_TOO_LARGE -> "Data too large"
+                    ADVERTISE_FAILED_FEATURE_UNSUPPORTED -> "Feature unsupported"
+                    ADVERTISE_FAILED_INTERNAL_ERROR -> "Internal error"
+                    ADVERTISE_FAILED_TOO_MANY_ADVERTISERS -> "Too many advertisers"
+                    else -> "Unknown error $errorCode"
+                }
+                _state.value = AdvertiserState.Failed("Advertise failed: $reason")
             }
         }
 
         callback = advertiseCallback
         _state.value = AdvertiserState.Starting
+        Log.d("BLE_ADV", "Calling startAdvertising...")
         currentAdvertiser.startAdvertising(settings, data, scanResponse, advertiseCallback)
     }
 
     @SuppressLint("MissingPermission")
     fun stop() {
+        Log.d("BLE_ADV", "Stop requested")
         val activeCallback = callback ?: return
         if (hasAdvertisePermission()) {
+            Log.d("BLE_ADV", "Stopping advertiser")
             advertiser?.stopAdvertising(activeCallback)
         }
         callback = null

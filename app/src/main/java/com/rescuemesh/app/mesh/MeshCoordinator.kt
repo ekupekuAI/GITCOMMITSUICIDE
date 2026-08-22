@@ -16,7 +16,9 @@ import com.rescuemesh.app.data.ReceiveResult
 import com.rescuemesh.app.data.toProto
 import com.rescuemesh.app.identity.NodeIdentityProvider
 import com.rescuemesh.app.identity.toDisplayNodeId
+import com.rescuemesh.app.identity.toHex
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -74,19 +76,55 @@ class MeshCoordinator(
         scope.launch {
             scanner.observations.collect { observation ->
                 neighbors.record(observation.device, observation.rssi, observation.observedAtElapsedMs)
-                gattClient.connect(observation.device)
+                
+                // Arbitration: Only connect if my ID is higher than the peer's Bluetooth address
+                // (Using address because we don't know their Node ID yet)
+                val myPseudoId = identityProvider.nodeId.toHex()
+                val peerPseudoId = observation.device.address.replace(":", "").lowercase()
+                
+                if (myPseudoId > peerPseudoId) {
+                    if (neighbors.shouldAttemptConnection(observation.device.address)) {
+                        Log.d("MESH", "Arbitration WON: Initiating connection to ${observation.device.address}")
+                        gattClient.connect(observation.device)
+                    }
+                } else {
+                    Log.v("MESH", "Arbitration LOST: Waiting for ${observation.device.address} to connect")
+                }
             }
         }
         scope.launch {
             gattClient.events.collect { event ->
                 neighbors.recordTransportEvent(event)
-                persistKnownPeerIfAvailable(event)
+                handleTransportEvent(event)
             }
         }
         scope.launch {
             gattServer.events.collect { event ->
                 neighbors.recordTransportEvent(event)
-                persistKnownPeerIfAvailable(event)
+                handleTransportEvent(event)
+            }
+        }
+        // Periodic cleanup and maintenance
+        scope.launch {
+            while (true) {
+                delay(5_000)
+                neighbors.refreshLiveness()
+                cleanupStaleNeighbors()
+                flushPendingMessages()
+            }
+        }
+    }
+
+    private suspend fun cleanupStaleNeighbors() {
+        val lostNeighbors = neighbors.state.value.filter { it.liveness == NeighborLiveness.Lost }
+        lostNeighbors.forEach { neighbor ->
+            neighbor.peerNodeIdBytes?.let { nodeId ->
+                repository.upsertKnownNeighbor(
+                    nodeId = nodeId,
+                    rssi = -127,
+                    state = "LOST",
+                    protocolVersion = 1
+                )
             }
         }
     }
@@ -123,9 +161,12 @@ class MeshCoordinator(
         }
     }
 
-    private suspend fun persistKnownPeerIfAvailable(event: BleTransportEvent) {
+    private suspend fun handleTransportEvent(event: BleTransportEvent) {
         when (event) {
-            is BleTransportEvent.Connected -> flushPendingMessages()
+            is BleTransportEvent.Connected -> {
+                Log.d("MESH", "Connected to ${event.device.address}, flushing messages")
+                flushPendingMessages()
+            }
             is BleTransportEvent.Disconnected -> {
                 val peerNodeId = neighbors.peerNodeIdBytesFor(event.device.address)
                 if (peerNodeId != null) {
@@ -136,21 +177,26 @@ class MeshCoordinator(
                         protocolVersion = 1,
                     )
                     Log.i("MESH", "Known peer unavailable: ${peerNodeId.toDisplayNodeId()}")
-                    flushPendingMessages()
                 }
             }
-            is BleTransportEvent.AckReceived -> repository.upsertKnownNeighbor(
-                nodeId = event.peerNodeId,
-                rssi = neighbors.rssiFor(event.device.address),
-                state = "CONNECTED",
-                protocolVersion = 1,
-            ).also { flushPendingMessages() }
-            is BleTransportEvent.HelloReceived -> repository.upsertKnownNeighbor(
-                nodeId = event.peerNodeId,
-                rssi = neighbors.rssiFor(event.device.address),
-                state = "CONNECTED",
-                protocolVersion = 1,
-            ).also { flushPendingMessages() }
+            is BleTransportEvent.AckReceived -> {
+                repository.upsertKnownNeighbor(
+                    nodeId = event.peerNodeId,
+                    rssi = neighbors.rssiFor(event.device.address),
+                    state = "CONNECTED",
+                    protocolVersion = 1,
+                )
+                flushPendingMessages()
+            }
+            is BleTransportEvent.HelloReceived -> {
+                repository.upsertKnownNeighbor(
+                    nodeId = event.peerNodeId,
+                    rssi = neighbors.rssiFor(event.device.address),
+                    state = "CONNECTED",
+                    protocolVersion = 1,
+                )
+                flushPendingMessages()
+            }
             is BleTransportEvent.MessageReceived -> {
                 val result = repository.persistReceivedMessage(
                     message = event.message,
@@ -159,7 +205,6 @@ class MeshCoordinator(
                 when (result) {
                     is ReceiveResult.Accepted -> {
                         Log.i("ROOM", "Message persisted: ${event.message.messageId.toByteArray().toDisplayNodeId()}")
-                        Log.i("MESH", "TTL changed to ${result.relayCopy.ttl}; hop count changed to ${result.relayCopy.hopCount}")
                         gattServer.acknowledgeMessagePersisted(event.device, event.message.messageId.toByteArray())
                         if (result.relayCopy.ttl > 0) {
                             val forwards = gattClient.sendMeshMessage(
@@ -183,6 +228,9 @@ class MeshCoordinator(
             is BleTransportEvent.MessageAckReceived -> {
                 repository.markRelayed(event.messageId)
                 Log.i("SOS", "Message delivered/relayed: ${event.messageId.toDisplayNodeId()}")
+            }
+            is BleTransportEvent.Error -> {
+                Log.w("MESH", "Transport error with ${event.device?.address}: ${event.reason}")
             }
             else -> Unit
         }
@@ -252,7 +300,7 @@ private class MutableNeighborTable {
             name = device.name,
             rssi = rssi,
             lastSeenElapsedMs = observedAtElapsedMs,
-            liveness = NeighborLiveness.Active,
+            liveness = liveness(SystemClock.elapsedRealtime() - observedAtElapsedMs),
             connectionState = previous?.connectionState ?: "DISCOVERED",
             peerNodeId = previous?.peerNodeId,
             peerNodeIdBytes = previous?.peerNodeIdBytes,
@@ -264,6 +312,11 @@ private class MutableNeighborTable {
             current += next
         }
         rows.value = current
+    }
+
+    fun shouldAttemptConnection(address: String): Boolean {
+        val neighbor = rows.value.find { it.sessionId == address } ?: return true
+        return neighbor.connectionState !in setOf("CONNECTED", "HELLO_SENT", "HELLO_RECEIVED", "ACK_RECEIVED")
     }
 
     fun recordTransportEvent(event: BleTransportEvent) {

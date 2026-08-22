@@ -39,24 +39,32 @@ class BleScanner(
 
     @SuppressLint("MissingPermission")
     fun start() {
-        if (callback != null) return
+        Log.d("BLE_SCAN", "Start requested. Current state: ${_state.value}")
+        if (callback != null) {
+            Log.d("BLE_SCAN", "Already scanning, ignoring start")
+            return
+        }
 
         val currentAdapter = adapter
         val currentScanner = scanner
         when {
             currentAdapter == null -> {
+                Log.e("BLE_SCAN", "Start failed: Bluetooth adapter unavailable")
                 _state.value = ScannerState.Unavailable("Bluetooth adapter unavailable")
                 return
             }
             !currentAdapter.isEnabled -> {
+                Log.e("BLE_SCAN", "Start failed: Bluetooth is off")
                 _state.value = ScannerState.Unavailable("Bluetooth is off")
                 return
             }
             currentScanner == null -> {
+                Log.e("BLE_SCAN", "Start failed: BLE scanning unsupported")
                 _state.value = ScannerState.Unavailable("BLE scanning unsupported")
                 return
             }
             !hasScanPermission() -> {
+                Log.e("BLE_SCAN", "Start failed: Permission missing")
                 _state.value = ScannerState.PermissionMissing
                 return
             }
@@ -67,25 +75,30 @@ class BleScanner(
             .build()
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
+            .setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
+            .setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)
             .build()
 
         val scanCallback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
+                Log.v("BLE_SCAN", "onScanResult: ${result.device.address} RSSI=${result.rssi}")
                 emit(result)
             }
 
             override fun onBatchScanResults(results: MutableList<ScanResult>) {
+                Log.v("BLE_SCAN", "onBatchScanResults: ${results.size} results")
                 results.forEach(::emit)
             }
 
             override fun onScanFailed(errorCode: Int) {
                 callback = null
-                Log.w("BLE", "Scan failed: $errorCode")
+                Log.e("BLE_SCAN", "Scan failed. Error code: $errorCode")
                 _state.value = ScannerState.Failed("Scan failed: $errorCode")
             }
 
             private fun emit(result: ScanResult) {
-                Log.i("BLE", "Node discovered: ${result.device.address} RSSI=${result.rssi}")
+                Log.i("BLE_SCAN", "DISCOVERED: ${result.device.address} (${result.device.name ?: "Unknown"}) RSSI=${result.rssi}")
                 _observations.tryEmit(
                     ScanObservation(
                         device = result.device,
@@ -98,14 +111,16 @@ class BleScanner(
 
         callback = scanCallback
         _state.value = ScannerState.Scanning
-        Log.i("BLE", "Filtered RescueMesh scan started")
+        Log.i("BLE_SCAN", "Starting scan with service filter ${BleConstants.MeshServiceUuid}")
         currentScanner.startScan(listOf(filter), settings, scanCallback)
     }
 
     @SuppressLint("MissingPermission")
     fun stop() {
+        Log.d("BLE_SCAN", "Stop requested")
         val activeCallback = callback ?: return
         if (hasScanPermission()) {
+            Log.d("BLE_SCAN", "Stopping scanner")
             scanner?.stopScan(activeCallback)
         }
         callback = null
