@@ -1,39 +1,25 @@
 # About RescueMesh
 
-## Project Vision
-RescueMesh was born from a critical problem: **the total collapse of communication during natural disasters.** When cell towers go down, people in need cannot reach responders, and responders cannot coordinate efficiently. RescueMesh solves this by turning every phone into a node in a decentralized, offline network.
+## What is RescueMesh?
+RescueMesh is an open-source project developed to provide a lifeline when traditional communication networks fail. It is a decentralized, offline messaging platform that relies solely on the Bluetooth hardware already present in modern smartphones.
 
-## How It Works
-The app uses **Bluetooth Low Energy (BLE)** to discover nearby devices. Unlike traditional Bluetooth, BLE allows for continuous low-power background operations.
+## Why we built it
+During floods, earthquakes, or other large-scale emergencies, the lack of information is often as dangerous as the disaster itself. We wanted to build a tool that allows communities to organize themselves and reach responders without needing a cellular signal. By creating a "mesh" of phones, we can extend the reach of a single device across an entire area.
 
-1.  **Discovery**: When you tap "Start Engine," your phone begins advertising its "RescueMesh Service UUID" and scanning for others.
-2.  **Handshake**: When two phones find each other, they perform a "Highest-ID Wins" arbitration to establish a single, stable GATT connection.
-3.  **The Mesh**: If Node A sends an SOS and Node B receives it, Node B checks if it has a better route (e.g., to a Responder). If not, B stores the message and re-broadcasts it to Node C.
-4.  **Security**: To prevent "Fake SOS" messages, every report is cryptographically signed by the sender's device. Responders verify these signatures to ensure the request is legitimate.
+## How it works (High Level)
+When you open RescueMesh and start the engine, your phone begins "shouting" out its presence using Bluetooth advertisements. Other nearby phones "hear" this and establish a temporary connection. If you send an SOS, your phone hands that message to any neighbor it can find. That neighbor then carries the message until it finds another person or a responder, repeating the process until help is coordinated.
 
-## Key Features in Detail
+## Who it is for
+- **Victims**: To broadcast location and specific needs (medical, fire, food).
+- **Responders**: To receive and aggregate reports into a real-time incident map.
+- **Relay Nodes**: Anyone with a smartphone can help extend the network by simply keeping the app active.
 
-### 1. The Responder Ecosystem
-Not all nodes are equal. A user can opt-in as a **Medical Responder** or **Search & Rescue**. The routing engine is "capability-aware," meaning it will prioritize sending a medical SOS toward a Medical node rather than a generic relay.
+## Core Technologies
+- **BLE Mesh**: Custom-built transport layer optimized for Android devices.
+- **Cryptography**: Using the phone's secure hardware to sign messages, ensuring help requests are genuine.
+- **Offline Maps**: Using device sensors and GPS to provide location context without a data connection.
 
-### 2. Incident Aggregation
-In a real crisis, 50 people might report the same fire. RescueMesh's **Correlation Engine** looks at the GPS coordinates and timestamps. If reports are within 100 meters of each other, it clusters them into one "Incident" on the Responder's dashboard, showing a "Corroboration Count" (e.g., "Fire: 50 reports"). This saves precious bandwidth.
-
-### 3. Data Privacy
-RescueMesh respects privacy even in chaos. **Public Relay** nodes (normal users) only see that a message is passing through them. They cannot read the private details of the SOS or see the victim's exact GPS location. Only **Authorized Responders** can decrypt and view the sensitive data.
-
-### 4. Hardware Impact Detection
-The app monitors the phone's **Accelerometer**. If a sudden high-G impact is detected followed by inactivity, the app can automatically flag the user's SOS with an "Impact Alert," signaling that the victim may be unconscious.
-
-## Technical Requirements
-- **Android 8.0+** (API 26)
-- **Bluetooth 5.0+** recommended for range/throughput.
-- **No Internet Required**: The core mesh is 100% infrastructure-independent.
-
-## Future Roadmap
-- **LoRa Integration**: Support for long-range radio hardware bridges.
-- **Mesh Voice-Notes**: Fragmented audio delivery across the mesh.
-- **Advanced PKI**: Integration with government-issued emergency certificates.
-
----
-**RescueMesh**: Connect. Relay. Save.
+## Practical Use Cases
+- **Mountain Rescue**: Coordinating in areas with zero reception.
+- **Natural Disasters**: Maintaining a community network after infrastructure collapse.
+- **Mass Gatherings**: Providing an emergency channel during network congestion at large events.
