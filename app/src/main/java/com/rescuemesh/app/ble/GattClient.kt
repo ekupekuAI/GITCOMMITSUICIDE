@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.rescuemesh.app.mesh.MeshConfig
 import com.rescuemesh.app.protocol.ControlType
 import com.rescuemesh.app.protocol.MeshMessage
 import com.rescuemesh.app.protocol.ProtocolCodec
@@ -24,12 +25,14 @@ import java.util.UUID
 class GattClient(
     context: Context,
     private val localNodeId: ByteArray,
+    private val identityProvider: com.rescuemesh.app.identity.NodeIdentityProvider,
 ) {
     private val appContext = context.applicationContext
     private val connections = mutableMapOf<String, BluetoothGatt>()
     private val backoffUntilElapsedMs = mutableMapOf<String, Long>()
     private val sentMessageKeys = mutableSetOf<String>()
     private val peerNodeIdsByAddress = mutableMapOf<String, ByteArray>()
+    private val peerRolesByAddress = mutableMapOf<String, com.rescuemesh.app.protocol.NodeRole>()
     
     // Per-device write queue to avoid GATT busy errors
     private val writeQueues = mutableMapOf<String, ArrayDeque<GattWriteOperation>>()
@@ -52,13 +55,13 @@ class GattClient(
             Log.d("GATT_CLIENT", "Already connected/connecting to $key, skipping")
             return
         }
-        if (connections.size >= MAX_CONNECTIONS) {
-            Log.w("GATT_CLIENT", "Max connections ($MAX_CONNECTIONS) reached, skipping $key")
+        if (connections.size >= MeshConfig.MAX_CLIENT_CONNECTIONS) {
+            Log.w("GATT_CLIENT", "Max connections reached, skipping $key")
             return
         }
         val backoff = backoffUntilElapsedMs[key] ?: 0L
         if (backoff > SystemClock.elapsedRealtime()) {
-            Log.d("GATT_CLIENT", "Backoff active for $key (wait ${backoff - SystemClock.elapsedRealtime()}ms), skipping")
+            Log.d("GATT_CLIENT", "Backoff active for $key, skipping")
             return
         }
         if (!hasConnectPermission()) {
@@ -140,17 +143,33 @@ class GattClient(
             Log.e("GATT_CLIENT", "No permission to send message")
             return 0
         }
-        var started = 0
+        
         val messageIdHex = message.messageId.toByteArray().toHexKey()
         Log.d("GATT_CLIENT", "SendMeshMessage: ID=$messageIdHex, targets=${connections.size}")
-        
-        connections.values.forEach { gatt ->
+
+        // Categorize targets: Responders vs Relays
+        val targets = connections.values.toList()
+        val responders = targets.filter { isResponderFor(peerRolesByAddress[it.device.address], message.category) }
+        val relays = targets.filter { !responders.contains(it) }
+
+        // Try responders first, then relays
+        val sortedTargets = responders + relays
+
+        var started = 0
+        sortedTargets.forEach { gatt ->
             val address = gatt.device.address
             val peerNodeId = peerNodeIdsByAddress[address]
             if (excludePeerNodeId != null && peerNodeId?.contentEquals(excludePeerNodeId) == true) {
                 Log.d("GATT_CLIENT", "Skipping loopback/previous hop to $address")
                 return@forEach
             }
+            
+            // Limit fan-out per transmission attempt
+            if (started >= MeshConfig.PREFERRED_RELAY_FANOUT) {
+                Log.d("GATT_CLIENT", "Fan-out limit reached for this transmission")
+                return@forEach
+            }
+
             val key = "$address:$messageIdHex"
             if (!sentMessageKeys.add(key)) {
                 Log.d("GATT_CLIENT", "Message already sent to $address, skipping")
@@ -169,10 +188,25 @@ class GattClient(
             enqueueWrite(gatt, GattWriteOperation.Characteristic(dataRx, payload))
             
             started += 1
-            Log.i("GATT_CLIENT", "DATA QUEUED: $address")
+            Log.i("GATT_CLIENT", "DATA QUEUED: $address (Role: ${peerRolesByAddress[address]})")
             _events.tryEmit(BleTransportEvent.MessageSent(gatt.device, message.messageId.toByteArray()))
         }
         return started
+    }
+
+    private fun isResponderFor(role: com.rescuemesh.app.protocol.NodeRole?, category: com.rescuemesh.app.protocol.EmergencyCategory): Boolean {
+        if (role == null) return false
+        if (role == com.rescuemesh.app.protocol.NodeRole.NODE_ROLE_COORDINATOR) return true
+        if (role == com.rescuemesh.app.protocol.NodeRole.NODE_ROLE_NETWORK_GATEWAY) return true
+        
+        return when (category) {
+            com.rescuemesh.app.protocol.EmergencyCategory.EMERGENCY_CATEGORY_MEDICAL -> role == com.rescuemesh.app.protocol.NodeRole.NODE_ROLE_MEDICAL_RESPONDER
+            com.rescuemesh.app.protocol.EmergencyCategory.EMERGENCY_CATEGORY_FIRE -> role == com.rescuemesh.app.protocol.NodeRole.NODE_ROLE_FIRE_RESPONDER
+            com.rescuemesh.app.protocol.EmergencyCategory.EMERGENCY_CATEGORY_SECURITY -> role == com.rescuemesh.app.protocol.NodeRole.NODE_ROLE_SEARCH_RESCUE
+            com.rescuemesh.app.protocol.EmergencyCategory.EMERGENCY_CATEGORY_TRAPPED -> role == com.rescuemesh.app.protocol.NodeRole.NODE_ROLE_SEARCH_RESCUE
+            com.rescuemesh.app.protocol.EmergencyCategory.EMERGENCY_CATEGORY_FLOOD -> role == com.rescuemesh.app.protocol.NodeRole.NODE_ROLE_SEARCH_RESCUE
+            else -> false
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -199,7 +233,7 @@ class GattClient(
         val service = gatt.getService(BleConstants.MeshServiceUuid)
         val control = service?.getCharacteristic(BleConstants.ControlCharacteristicUuid) ?: return
 
-        val payload = ProtocolCodec.encodeControl(ProtocolCodec.hello(localNodeId))
+        val payload = ProtocolCodec.encodeControl(ProtocolCodec.hello(localNodeId, identityProvider.nodeRole))
         control.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
         enqueueWrite(gatt, GattWriteOperation.Characteristic(control, payload))
         _events.tryEmit(BleTransportEvent.HelloSent(gatt.device))
@@ -321,8 +355,15 @@ class GattClient(
                 if (message.type == ControlType.CONTROL_TYPE_ACK) {
                     if (message.ackMessageId.isEmpty) {
                         peerNodeIdsByAddress[device.address] = message.nodeId.toByteArray()
-                        Log.i("MESH", "ACK received from ${device.address}")
-                        _events.tryEmit(BleTransportEvent.AckReceived(device, message.nodeId.toByteArray()))
+                        peerRolesByAddress[device.address] = message.role
+                        Log.i("MESH", "ACK received from ${device.address} with role ${message.role}")
+                        _events.tryEmit(
+                            BleTransportEvent.AckReceived(
+                                device = device,
+                                peerNodeId = message.nodeId.toByteArray(),
+                                role = message.role
+                            )
+                        )
                     } else {
                         Log.i("SOS", "Message delivered ACK from ${device.address}")
                         _events.tryEmit(
@@ -344,9 +385,10 @@ class GattClient(
         val address = gatt.device.address
         connections.remove(address)
         peerNodeIdsByAddress.remove(address)
+        peerRolesByAddress.remove(address)
         writeQueues.remove(address)
         isWriting.remove(address)
-        backoffUntilElapsedMs[address] = SystemClock.elapsedRealtime() + RETRY_BACKOFF_MS
+        backoffUntilElapsedMs[address] = SystemClock.elapsedRealtime() + MeshConfig.RECONNECT_BACKOFF_MS
         Log.i("BLE", "GATT closed for $address: $reason; backoff scheduled")
         if (hasConnectPermission()) {
             gatt.close()
@@ -363,8 +405,6 @@ class GattClient(
     }
 
     private companion object {
-        const val MAX_CONNECTIONS = 3
-        const val RETRY_BACKOFF_MS = 5_000L
         val CLIENT_CONFIG_DESCRIPTOR: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
     }
 }

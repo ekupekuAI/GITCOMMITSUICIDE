@@ -9,7 +9,25 @@ object ForwardingPolicy {
             message.state in setOf("PERSISTED", "QUEUED", "WAITING_FOR_NEIGHBOR")
     }
 
-    fun shouldForwardToPeer(previousHopNodeId: ByteArray?, candidatePeerNodeId: ByteArray): Boolean {
-        return previousHopNodeId == null || !previousHopNodeId.contentEquals(candidatePeerNodeId)
+    /**
+     * Determines if a message should be sent to a specific peer.
+     * Prevents immediate loopback to the previous hop.
+     */
+    fun shouldForwardToPeer(
+        message: MessageEntity,
+        candidatePeerNodeId: ByteArray,
+        previousHopNodeId: ByteArray?
+    ): Boolean {
+        // Don't send back to where it just came from
+        if (previousHopNodeId != null && previousHopNodeId.contentEquals(candidatePeerNodeId)) {
+            return false
+        }
+        
+        // Don't send back to the origin
+        if (message.originNodeId.contentEquals(candidatePeerNodeId)) {
+            return false
+        }
+
+        return true
     }
 }

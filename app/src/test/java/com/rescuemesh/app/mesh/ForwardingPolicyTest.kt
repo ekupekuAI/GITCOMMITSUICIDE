@@ -17,11 +17,21 @@ class ForwardingPolicyTest {
     }
 
     @Test
-    fun doesNotForwardBackToPreviousHop() {
-        val peer = byteArrayOf(1, 2, 3)
+    fun doesNotForwardBackToPreviousHopOrOrigin() {
+        val origin = byteArrayOf(1, 1, 1)
+        val prevHop = byteArrayOf(2, 2, 2)
+        val other = byteArrayOf(3, 3, 3)
+        
+        val message = message(ttl = 1, expiresAtMs = 2000).copy(originNodeId = origin)
 
-        assertFalse(ForwardingPolicy.shouldForwardToPeer(peer, peer.copyOf()))
-        assertTrue(ForwardingPolicy.shouldForwardToPeer(peer, byteArrayOf(4, 5, 6)))
+        // Don't send back to origin
+        assertFalse(ForwardingPolicy.shouldForwardToPeer(message, origin, null))
+        
+        // Don't send back to previous hop
+        assertFalse(ForwardingPolicy.shouldForwardToPeer(message, prevHop, prevHop))
+        
+        // Allowed to send to others
+        assertTrue(ForwardingPolicy.shouldForwardToPeer(message, other, prevHop))
     }
 
     private fun message(
@@ -45,6 +55,13 @@ class ForwardingPolicyTest {
             state = state,
             receivedAtMs = 1,
             lastForwardedAtMs = null,
+            previousHopNodeId = null,
+            latitude = null,
+            longitude = null,
+            locationAccuracy = null,
+            publicKey = null,
+            category = 0,
+            originRole = 0
         )
     }
 }

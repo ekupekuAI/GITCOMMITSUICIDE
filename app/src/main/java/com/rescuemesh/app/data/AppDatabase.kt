@@ -12,8 +12,9 @@ import androidx.room.RoomDatabase
         MessageReceiptEntity::class,
         NeighborEntity::class,
         ForwardAttemptEntity::class,
+        IncidentEntity::class,
     ],
-    version = 1,
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -29,7 +30,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "rescuemesh.db",
-                ).build().also { instance = it }
+                )
+                .fallbackToDestructiveMigration()
+                .build().also { instance = it }
             }
         }
     }

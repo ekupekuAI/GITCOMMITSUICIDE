@@ -31,6 +31,7 @@ import com.rescuemesh.app.ui.theme.TextSecondary
 @Composable
 fun GlassPanel(
     modifier: Modifier = Modifier,
+    color: Color = GlassWhite,
     content: @Composable () -> Unit,
 ) {
     Surface(
@@ -40,7 +41,7 @@ fun GlassPanel(
                 BorderStroke(1.dp, GlassBorder),
                 RoundedCornerShape(16.dp),
             ),
-        color = GlassWhite,
+        color = color,
         content = content,
     )
 }

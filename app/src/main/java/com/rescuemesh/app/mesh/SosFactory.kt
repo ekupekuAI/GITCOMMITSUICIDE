@@ -3,6 +3,10 @@ package com.rescuemesh.app.mesh
 import com.google.protobuf.ByteString
 import com.rescuemesh.app.protocol.MeshMessage
 import com.rescuemesh.app.protocol.MessageType
+import com.rescuemesh.app.protocol.Location
+import com.rescuemesh.app.protocol.EmergencyCategory
+import com.rescuemesh.app.protocol.NodeRole
+import com.rescuemesh.app.identity.SecurityProvider
 import java.security.SecureRandom
 
 object SosFactory {
@@ -12,24 +16,48 @@ object SosFactory {
     fun create(
         originNodeId: ByteArray,
         text: String,
+        securityProvider: SecurityProvider,
+        category: EmergencyCategory = EmergencyCategory.EMERGENCY_CATEGORY_UNSPECIFIED,
+        originRole: NodeRole = NodeRole.NODE_ROLE_PUBLIC_RELAY,
+        location: android.location.Location? = null,
+        impactDetected: Boolean = false,
+        priority: Int = 0,
         nowMs: Long = System.currentTimeMillis(),
     ): MeshMessage {
-        require(text.isNotBlank()) { "SOS text cannot be blank" }
-        require(text.encodeToByteArray().size <= 220) { "SOS text is too large" }
+        val finalDetails = if (impactDetected) "[IMPACT DETECTED] $text" else text
+        require(finalDetails.isNotBlank()) { "SOS text cannot be blank" }
+        require(finalDetails.encodeToByteArray().size <= 220) { "SOS text is too large" }
 
-        return MeshMessage.newBuilder()
+        val builder = MeshMessage.newBuilder()
             .setMessageId(ByteString.copyFrom(randomId()))
             .setOriginNodeId(ByteString.copyFrom(originNodeId))
             .setDestinationId(ByteString.EMPTY)
             .setMessageType(MessageType.MESSAGE_TYPE_SOS)
-            .setPriority(0)
+            .setPriority(priority)
             .setTtl(DEFAULT_TTL)
             .setHopCount(0)
             .setCreatedAtMs(nowMs)
             .setExpiresAtMs(nowMs + DEFAULT_LIFETIME_MS)
             .setPayloadVersion(1)
-            .setPayload(ByteString.copyFrom(text.encodeToByteArray()))
-            .setSignature(ByteString.EMPTY)
+            .setPayload(ByteString.copyFrom(finalDetails.encodeToByteArray()))
+            .setPublicKey(ByteString.copyFrom(securityProvider.getPublicKey()))
+            .setCategory(category)
+            .setOriginRole(originRole)
+
+        if (location != null) {
+            builder.location = Location.newBuilder()
+                .setLatitude(location.latitude)
+                .setLongitude(location.longitude)
+                .setTimestampMs(location.time)
+                .setAccuracy(location.accuracy)
+                .build()
+        }
+
+        val unsignedMessage = builder.build()
+        val signature = securityProvider.sign(unsignedMessage.toByteArray())
+        
+        return unsignedMessage.toBuilder()
+            .setSignature(ByteString.copyFrom(signature))
             .build()
     }
 

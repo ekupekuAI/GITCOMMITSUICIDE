@@ -11,12 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -46,14 +41,12 @@ import com.rescuemesh.app.ble.GattClient
 import com.rescuemesh.app.ble.GattServer
 import com.rescuemesh.app.data.AppDatabase
 import com.rescuemesh.app.data.MessageRepository
+import com.rescuemesh.app.identity.LocationProvider
 import com.rescuemesh.app.identity.NodeIdentityProvider
+import com.rescuemesh.app.identity.SecurityProvider
+import com.rescuemesh.app.identity.SensorProvider
 import com.rescuemesh.app.mesh.MeshCoordinator
-import com.rescuemesh.app.ui.screens.HomeScreen
-import com.rescuemesh.app.ui.screens.MessagesScreen
-import com.rescuemesh.app.ui.screens.NeighborsScreen
-import com.rescuemesh.app.ui.screens.SettingsScreen
-import com.rescuemesh.app.ui.screens.SosScreen
-import com.rescuemesh.app.ui.screens.TopologyScreen
+import com.rescuemesh.app.ui.screens.*
 import com.rescuemesh.app.ui.theme.RescueMeshTheme
 import kotlinx.coroutines.delay
 
@@ -75,6 +68,7 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object Messages : Screen("messages", "Messages", Icons.Default.List)
     object Topology : Screen("topology", "Topology", Icons.Default.LocationOn)
     object Settings : Screen("settings", "Settings", Icons.Default.Settings)
+    object Diagnostics : Screen("diagnostics", "Debug", Icons.Default.Build)
 }
 
 @Composable
@@ -88,10 +82,13 @@ private fun RescueMeshApp() {
         val repository = MessageRepository(AppDatabase.get(context).messageDao())
         MeshCoordinator(
             identityProvider = identityProvider,
+            securityProvider = SecurityProvider(),
+            locationProvider = LocationProvider(context),
+            sensorProvider = SensorProvider(context),
             advertiser = BleAdvertiser(context),
             scanner = BleScanner(context),
-            gattServer = GattServer(context, identityProvider.nodeId),
-            gattClient = GattClient(context, identityProvider.nodeId),
+            gattServer = GattServer(context, identityProvider.nodeId, identityProvider),
+            gattClient = GattClient(context, identityProvider.nodeId, identityProvider),
             repository = repository,
             scope = scope,
         )
@@ -132,7 +129,7 @@ private fun RescueMeshApp() {
             val currentDestination = navBackStackEntry?.destination
             
             NavigationBar {
-                val items = listOf(Screen.Home, Screen.Neighbors, Screen.Messages, Screen.Topology, Screen.Settings)
+                val items = listOf(Screen.Home, Screen.Neighbors, Screen.Messages, Screen.Topology, Screen.Diagnostics, Screen.Settings)
                 items.forEach { screen ->
                     NavigationBarItem(
                         icon = { Icon(screen.icon, contentDescription = screen.label) },
@@ -158,6 +155,7 @@ private fun RescueMeshApp() {
                     state = uiState,
                     permissionsGranted = hasPermissions,
                     discoveryRequested = discoveryRequested,
+                    localRole = identityProvider.nodeRole,
                     onNavigateToSos = { navController.navigate(Screen.SOS.route) },
                     onToggleDiscovery = {
                         if (!hasPermissions) {
@@ -172,7 +170,9 @@ private fun RescueMeshApp() {
             }
             composable(Screen.SOS.route) {
                 SosScreen(
-                    onSendSos = { coordinator.createSos(it) },
+                    onSendSos = { text, priority, category -> 
+                        coordinator.createSos(text, priority, category) 
+                    },
                     onBack = { navController.popBackStack() }
                 )
             }
@@ -180,18 +180,29 @@ private fun RescueMeshApp() {
                 NeighborsScreen(uiState.neighbors)
             }
             composable(Screen.Messages.route) {
-                MessagesScreen(uiState.sosMessages)
+                MessagesScreen(uiState.sosMessages, identityProvider.nodeRole)
             }
             composable(Screen.Topology.route) {
                 TopologyScreen(uiState.nodeId, uiState.neighbors)
+            }
+            composable(Screen.Diagnostics.route) {
+                DiagnosticsScreen(uiState, onSetPowerMode = { coordinator.setPowerMode(it) })
             }
             composable(Screen.Settings.route) {
                 SettingsScreen(
                     state = uiState,
                     currentNodeName = nodeName,
+                    currentNodeRole = identityProvider.nodeRole,
                     onSaveName = { newName ->
                         identityProvider.nodeName = newName
                         nodeName = newName
+                    },
+                    onSaveRole = { newRole ->
+                        identityProvider.nodeRole = newRole
+                        if (discoveryRequested) {
+                            coordinator.stopDiscovery()
+                            coordinator.startDiscovery()
+                        }
                     }
                 )
             }
@@ -213,13 +224,15 @@ private fun requiredBlePermissions(): Array<String> {
             Manifest.permission.BLUETOOTH_SCAN,
             Manifest.permission.BLUETOOTH_ADVERTISE,
             Manifest.permission.BLUETOOTH_CONNECT,
-            Manifest.permission.ACCESS_FINE_LOCATION
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
         )
     } else {
         arrayOf(
             Manifest.permission.BLUETOOTH,
             Manifest.permission.BLUETOOTH_ADMIN,
-            Manifest.permission.ACCESS_FINE_LOCATION
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
         )
     }
 }

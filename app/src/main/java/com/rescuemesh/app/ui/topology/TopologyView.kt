@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.rescuemesh.app.mesh.NeighborLiveness
 import com.rescuemesh.app.mesh.NeighborUiModel
 import com.rescuemesh.app.ui.theme.EmergencyAmber
+import com.rescuemesh.app.ui.theme.EmergencyRed
 import com.rescuemesh.app.ui.theme.EmergencyTeal
 import com.rescuemesh.app.ui.theme.TextPrimary
 import kotlin.math.PI
@@ -131,7 +132,10 @@ fun TopologyView(
                                 neighbor.connectionState == "ACK_RECEIVED" ||
                                 neighbor.connectionState == "HELLO_RECEIVED"
                 
-                val nodeColor = if (isConnected) EmergencyTeal else EmergencyAmber
+                val isResponder = neighbor.role != null && 
+                                neighbor.role != com.rescuemesh.app.protocol.NodeRole.NODE_ROLE_PUBLIC_RELAY
+                
+                val nodeColor = if (isResponder) EmergencyRed else if (isConnected) EmergencyTeal else EmergencyAmber
                 
                 // Pulsing animation
                 val pulse = if (isConnected) (sin(animTime * 4f).toFloat() + 1f) * 0.15f else 0f
@@ -175,9 +179,9 @@ fun TopologyView(
                     text = neighbor.peerNodeId?.take(10) ?: "DISCOVERING",
                     topLeft = Offset(x - 35.dp.toPx(), y + 25.dp.toPx()),
                     style = TextStyle(
-                        color = TextPrimary, 
+                        color = if (isResponder) EmergencyRed else TextPrimary, 
                         fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = if (isResponder) FontWeight.Black else FontWeight.Bold
                     )
                 )
             }

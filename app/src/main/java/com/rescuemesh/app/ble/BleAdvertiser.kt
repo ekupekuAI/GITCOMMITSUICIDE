@@ -11,6 +11,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.rescuemesh.app.mesh.MeshConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -28,8 +29,8 @@ class BleAdvertiser(
     private var callback: AdvertiseCallback? = null
 
     @SuppressLint("MissingPermission")
-    fun start() {
-        Log.d("BLE_ADV", "Start requested. Current state: ${_state.value}")
+    fun start(powerMode: MeshConfig.PowerMode = MeshConfig.PowerMode.NORMAL) {
+        Log.d("BLE_ADV", "Start requested (Mode: $powerMode). Current state: ${_state.value}")
         if (callback != null) {
             Log.d("BLE_ADV", "Already advertising, ignoring start")
             return
@@ -61,7 +62,7 @@ class BleAdvertiser(
         }
 
         val settings = AdvertiseSettings.Builder()
-            .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
+            .setAdvertiseMode(MeshConfig.getAdvertiseMode(powerMode))
             .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
             .setConnectable(true)
             .build()

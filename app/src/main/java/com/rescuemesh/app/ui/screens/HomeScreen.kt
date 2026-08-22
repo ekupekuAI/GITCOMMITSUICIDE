@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,15 +34,20 @@ fun HomeScreen(
     state: MeshDiscoveryUiState,
     permissionsGranted: Boolean,
     discoveryRequested: Boolean,
+    localRole: com.rescuemesh.app.protocol.NodeRole,
     onNavigateToSos: () -> Unit,
     onToggleDiscovery: () -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isResponder = localRole != com.rescuemesh.app.protocol.NodeRole.NODE_ROLE_PUBLIC_RELAY
+    
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(Color(0xFF090B10), Color(0xFF10141D))
+                    colors = if (isResponder) listOf(Color(0xFF0F1520), Color(0xFF1A1F30)) 
+                             else listOf(Color(0xFF090B10), Color(0xFF10141D))
                 )
             )
     ) {
@@ -51,11 +58,40 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                HomeHeader(state, permissionsGranted, discoveryRequested)
+                HomeHeader(state, permissionsGranted, discoveryRequested, localRole)
+            }
+
+            if (isResponder) {
+                item {
+                    Text(
+                        "RESPONDER DASHBOARD", 
+                        style = MaterialTheme.typography.labelLarge, 
+                        color = EmergencyTeal,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            } else {
+                item {
+                    SosTriggerButton(onNavigateToSos)
+                }
             }
 
             item {
-                SosTriggerButton(onNavigateToSos)
+                OutlinedButton(
+                    onClick = { 
+                        val intent = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
+                            data = android.net.Uri.parse("tel:112")
+                        }
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
+                ) {
+                    Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("CALL LOCAL EMERGENCY (CELLULAR)")
+                }
             }
 
             item {
@@ -80,6 +116,20 @@ fun HomeScreen(
 
             item {
                 MeshStatusCard(state, discoveryRequested, onToggleDiscovery)
+            }
+
+            if (state.incidents.isNotEmpty()) {
+                item {
+                    Text(
+                        "ACTIVE INCIDENTS", 
+                        style = MaterialTheme.typography.labelLarge, 
+                        color = TextSecondary,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+                items(state.incidents) { incident ->
+                    IncidentItem(incident)
+                }
             }
             
             if (state.sosMessages.isNotEmpty()) {
@@ -142,7 +192,10 @@ private fun HomeHeader(
     state: MeshDiscoveryUiState,
     permissionsGranted: Boolean,
     discoveryRequested: Boolean,
+    localRole: com.rescuemesh.app.protocol.NodeRole,
 ) {
+    val roleLabel = localRole.name.replace("NODE_ROLE_", "").replace("_", " ")
+    
     GlassPanel {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -155,7 +208,7 @@ private fun HomeHeader(
             ) {
                 Column {
                     Text("RescueMesh", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
-                    Text("SECURE OFFLINE MESH", color = TextSecondary, style = MaterialTheme.typography.labelLarge)
+                    Text(roleLabel, color = EmergencyTeal, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 }
                 
                 StatusPill(
@@ -226,6 +279,32 @@ private fun MeshStatusCard(
                         checkedTrackColor = EmergencyTeal.copy(alpha = 0.3f)
                     )
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun IncidentItem(incident: com.rescuemesh.app.data.IncidentEntity) {
+    val categoryLabel = com.rescuemesh.app.protocol.EmergencyCategory.forNumber(incident.category).name.replace("EMERGENCY_CATEGORY_", "")
+    
+    GlassPanel(modifier = Modifier.fillMaxWidth(), color = EmergencyRed.copy(alpha = 0.1f)) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(EmergencyRed, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(incident.corroboratingCount.toString(), color = Color.White, fontWeight = FontWeight.Bold)
+            }
+            Column {
+                Text(categoryLabel, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge, color = EmergencyRed)
+                Text(incident.summary, maxLines = 1, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             }
         }
     }

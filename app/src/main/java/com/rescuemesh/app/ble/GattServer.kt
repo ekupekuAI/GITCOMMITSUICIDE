@@ -27,6 +27,7 @@ import java.util.UUID
 class GattServer(
     context: Context,
     private val localNodeId: ByteArray,
+    private val identityProvider: com.rescuemesh.app.identity.NodeIdentityProvider,
 ) {
     private val appContext = context.applicationContext
     private val bluetoothManager = appContext.getSystemService(BluetoothManager::class.java)
@@ -239,13 +240,19 @@ class GattServer(
                 if (message.type == ControlType.CONTROL_TYPE_HELLO) {
                     val peerNodeId = message.nodeId.toByteArray()
                     peerNodeIdsByAddress[device.address] = peerNodeId
-                    Log.i("GATT_SERVER", "HELLO RECEIVED from ${device.address}: ${peerNodeId.toHexKey()}")
-                    _events.tryEmit(BleTransportEvent.HelloReceived(device, peerNodeId))
+                    Log.i("GATT_SERVER", "HELLO RECEIVED from ${device.address}: ${peerNodeId.toHexKey()} (${message.role})")
+                    _events.tryEmit(
+                        BleTransportEvent.HelloReceived(
+                            device = device, 
+                            peerNodeId = peerNodeId,
+                            role = message.role
+                        )
+                    )
                     
                     Log.d("GATT_SERVER", "Sending HELLO ACK to ${device.address}")
                     notifyControl(
                         device,
-                        ProtocolCodec.ack(localNodeId),
+                        ProtocolCodec.ack(localNodeId, identityProvider.nodeRole),
                     )
                 }
             }

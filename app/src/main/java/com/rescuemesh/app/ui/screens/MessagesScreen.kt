@@ -1,12 +1,7 @@
 package com.rescuemesh.app.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
@@ -24,7 +19,10 @@ import com.rescuemesh.app.ui.theme.EmergencyTeal
 import com.rescuemesh.app.ui.theme.TextSecondary
 
 @Composable
-fun MessagesScreen(messages: List<SosUiModel>) {
+fun MessagesScreen(
+    messages: List<SosUiModel>,
+    localRole: com.rescuemesh.app.protocol.NodeRole
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -44,32 +42,69 @@ fun MessagesScreen(messages: List<SosUiModel>) {
                 }
             }
             items(messages) { message ->
-                SosItem(message)
+                SosItem(message, localRole)
             }
         }
     }
 }
 
 @Composable
-private fun SosItem(message: SosUiModel) {
+private fun SosItem(
+    message: SosUiModel,
+    localRole: com.rescuemesh.app.protocol.NodeRole
+) {
+    val isAuthorized = localRole != com.rescuemesh.app.protocol.NodeRole.NODE_ROLE_PUBLIC_RELAY
+    
     val stateColor = when (message.state) {
         "PERSISTED", "QUEUED" -> EmergencyAmber
         "RELAYED" -> EmergencyTeal
         else -> TextSecondary
     }
 
+    val priorityLabel = when(message.priority) {
+        3 -> "CRITICAL"
+        2 -> "HIGH"
+        1 -> "NORMAL"
+        else -> "LOW"
+    }
+    
+    val priorityColor = when(message.priority) {
+        3 -> EmergencyRed
+        2 -> EmergencyAmber
+        1 -> EmergencyTeal
+        else -> Color.Gray
+    }
+
     GlassPanel {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(message.id, fontWeight = FontWeight.Black, color = EmergencyRed)
-                Text(message.state, color = stateColor, style = MaterialTheme.typography.labelMedium)
+                Text(priorityLabel, color = priorityColor, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
             }
             
-            Text(message.text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            val displayedText = if (isAuthorized) message.text else "CONTENT MASKED (RELAY ONLY)"
+            Text(displayedText, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
             
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Hops: ${message.hopCount}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                Text("TTL: ${message.ttl}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+            if (message.latitude != null && message.longitude != null) {
+                val displayedLoc = if (isAuthorized) {
+                    "LOCATION: ${"%.4f".format(message.latitude)}, ${"%.4f".format(message.longitude)}"
+                } else {
+                    "LOCATION MASKED (RELAY ONLY)"
+                }
+                Text(
+                    displayedLoc,
+                    color = EmergencyTeal,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("Hops: ${message.hopCount}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text("TTL: ${message.ttl}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                }
+                Text(message.state, color = stateColor, style = MaterialTheme.typography.labelSmall)
             }
         }
     }

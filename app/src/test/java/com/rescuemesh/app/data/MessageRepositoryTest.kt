@@ -78,9 +78,11 @@ private class FakeMessageDao : MessageDao {
 
     override suspend fun upsertNeighbor(neighbor: NeighborEntity) = Unit
     override suspend fun upsertIdentity(identity: NodeIdentityEntity) = Unit
-    override suspend fun insertForwardAttempt(attempt: ForwardAttemptEntity) = Unit
+    override suspend fun upsertIncident(incident: IncidentEntity): Long = 0
     override fun observeMessages(): Flow<List<MessageEntity>> = emptyFlow()
     override fun observeNeighbors(): Flow<List<NeighborEntity>> = emptyFlow()
+    override fun observeIncidents(): Flow<List<IncidentEntity>> = emptyFlow()
+    override suspend fun findMatchingIncident(category: Int, latMin: Double, latMax: Double, lonMin: Double, lonMax: Double): IncidentEntity? = null
     override suspend fun pendingMessages(nowMs: Long, limit: Int): List<MessageEntity> = emptyList()
     override suspend fun updateMessageState(messageId: ByteArray, state: String) = Unit
     override suspend fun markForwarded(messageId: ByteArray, state: String, forwardedAtMs: Long) = Unit

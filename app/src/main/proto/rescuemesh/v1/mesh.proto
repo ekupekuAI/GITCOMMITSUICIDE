@@ -10,7 +10,7 @@ message MeshMessage {
   bytes origin_node_id = 2;
   bytes destination_id = 3;
   MessageType message_type = 4;
-  uint32 priority = 5;
+  uint32 priority = 5; // 0:LOW, 1:NORMAL, 2:HIGH, 3:CRITICAL
   uint32 ttl = 6;
   uint32 hop_count = 7;
   uint64 created_at_ms = 8;
@@ -18,6 +18,17 @@ message MeshMessage {
   uint32 payload_version = 10;
   bytes payload = 11;
   bytes signature = 12;
+  optional Location location = 13;
+  bytes public_key = 14;
+  EmergencyCategory category = 15;
+  NodeRole origin_role = 16;
+}
+
+message Location {
+  double latitude = 1;
+  double longitude = 2;
+  uint64 timestamp_ms = 3;
+  float accuracy = 4;
 }
 
 message ControlMessage {
@@ -27,6 +38,7 @@ message ControlMessage {
   repeated bytes message_ids = 4;
   bytes ack_message_id = 5;
   repeated string capabilities = 6;
+  NodeRole role = 7;
 }
 
 enum MessageType {
@@ -43,4 +55,25 @@ enum ControlType {
   CONTROL_TYPE_INVENTORY_REQUEST = 2;
   CONTROL_TYPE_INVENTORY_RESPONSE = 3;
   CONTROL_TYPE_ACK = 4;
+}
+
+enum NodeRole {
+  NODE_ROLE_PUBLIC_RELAY = 0;
+  NODE_ROLE_MEDICAL_RESPONDER = 1;
+  NODE_ROLE_FIRE_RESPONDER = 2;
+  NODE_ROLE_SEARCH_RESCUE = 3;
+  NODE_ROLE_SHELTER = 4;
+  NODE_ROLE_TRANSPORT = 5;
+  NODE_ROLE_NETWORK_GATEWAY = 6;
+  NODE_ROLE_COORDINATOR = 7;
+}
+
+enum EmergencyCategory {
+  EMERGENCY_CATEGORY_UNSPECIFIED = 0;
+  EMERGENCY_CATEGORY_MEDICAL = 1;
+  EMERGENCY_CATEGORY_FIRE = 2;
+  EMERGENCY_CATEGORY_SECURITY = 3;
+  EMERGENCY_CATEGORY_TRAPPED = 4;
+  EMERGENCY_CATEGORY_FLOOD = 5;
+  EMERGENCY_CATEGORY_OTHER = 6;
 }

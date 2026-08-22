@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.rescuemesh.app.mesh.MeshConfig
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -38,8 +39,8 @@ class BleScanner(
     private var callback: ScanCallback? = null
 
     @SuppressLint("MissingPermission")
-    fun start() {
-        Log.d("BLE_SCAN", "Start requested. Current state: ${_state.value}")
+    fun start(powerMode: MeshConfig.PowerMode = MeshConfig.PowerMode.NORMAL) {
+        Log.d("BLE_SCAN", "Start requested (Mode: $powerMode). Current state: ${_state.value}")
         if (callback != null) {
             Log.d("BLE_SCAN", "Already scanning, ignoring start")
             return
@@ -74,7 +75,7 @@ class BleScanner(
             .setServiceUuid(BleConstants.MeshServiceParcelUuid)
             .build()
         val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setScanMode(MeshConfig.getScanMode(powerMode))
             .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
             .setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
             .setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)

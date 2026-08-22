@@ -25,20 +25,22 @@ object ProtocolCodec {
         }
     }
 
-    fun hello(nodeId: ByteArray): ControlMessage {
+    fun hello(nodeId: ByteArray, role: NodeRole = NodeRole.NODE_ROLE_PUBLIC_RELAY): ControlMessage {
         return ControlMessage.newBuilder()
             .setType(ControlType.CONTROL_TYPE_HELLO)
             .setProtocolVersion(WireFrameCodec.PROTOCOL_VERSION.toInt())
             .setNodeId(ByteString.copyFrom(nodeId))
+            .setRole(role)
             .addCapabilities("phase4-framed-protobuf")
             .build()
     }
 
-    fun ack(nodeId: ByteArray): ControlMessage {
+    fun ack(nodeId: ByteArray, role: NodeRole = NodeRole.NODE_ROLE_PUBLIC_RELAY): ControlMessage {
         return ControlMessage.newBuilder()
             .setType(ControlType.CONTROL_TYPE_ACK)
             .setProtocolVersion(WireFrameCodec.PROTOCOL_VERSION.toInt())
             .setNodeId(ByteString.copyFrom(nodeId))
+            .setRole(role)
             .build()
     }
 

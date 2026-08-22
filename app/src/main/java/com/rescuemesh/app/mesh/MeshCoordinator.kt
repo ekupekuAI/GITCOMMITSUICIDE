@@ -14,11 +14,16 @@ import com.rescuemesh.app.ble.ScannerState
 import com.rescuemesh.app.data.MessageRepository
 import com.rescuemesh.app.data.ReceiveResult
 import com.rescuemesh.app.data.toProto
+import com.rescuemesh.app.identity.LocationProvider
 import com.rescuemesh.app.identity.NodeIdentityProvider
+import com.rescuemesh.app.identity.SecurityProvider
+import com.rescuemesh.app.identity.SensorProvider
 import com.rescuemesh.app.identity.toDisplayNodeId
 import com.rescuemesh.app.identity.toHex
+import com.rescuemesh.app.protocol.MeshMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -27,6 +32,9 @@ import kotlinx.coroutines.launch
 
 class MeshCoordinator(
     private val identityProvider: NodeIdentityProvider,
+    private val securityProvider: SecurityProvider,
+    private val locationProvider: LocationProvider,
+    private val sensorProvider: SensorProvider,
     private val advertiser: BleAdvertiser,
     private val scanner: BleScanner,
     private val gattServer: GattServer,
@@ -35,13 +43,30 @@ class MeshCoordinator(
     private val scope: CoroutineScope,
 ) {
     private val neighbors = MutableNeighborTable()
+    private val performanceTracker = PerformanceTracker()
+    
+    private val _powerMode = MutableStateFlow(MeshConfig.PowerMode.NORMAL)
+    val powerMode: StateFlow<MeshConfig.PowerMode> = _powerMode
 
     val uiState: StateFlow<MeshDiscoveryUiState> = combine(
         advertiser.state,
         scanner.state,
         neighbors.state,
         repository.observeMessages(),
-    ) { advertiserState, scannerState, neighborRows, messages ->
+        performanceTracker.stats,
+        _powerMode,
+        sensorProvider.impactDetected,
+        repository.observeIncidents()
+    ) { args: Array<Any> ->
+        val advertiserState = args[0] as AdvertiserState
+        val scannerState = args[1] as ScannerState
+        val neighborRows = args[2] as List<NeighborUiModel>
+        val messages = args[3] as List<com.rescuemesh.app.data.MessageEntity>
+        val stats = args[4] as PerformanceStats
+        val mode = args[5] as MeshConfig.PowerMode
+        val impact = args[6] as Boolean
+        val incidents = args[7] as List<com.rescuemesh.app.data.IncidentEntity>
+
         MeshDiscoveryUiState(
             nodeId = identityProvider.displayId,
             advertiserState = advertiserState,
@@ -54,8 +79,15 @@ class MeshCoordinator(
                     state = message.state,
                     ttl = message.ttl,
                     hopCount = message.hopCount,
+                    priority = message.priority,
+                    latitude = message.latitude,
+                    longitude = message.longitude
                 )
             },
+            performanceStats = stats,
+            currentPowerMode = mode,
+            impactDetected = impact,
+            incidents = incidents
         )
     }.stateIn(
         scope = scope,
@@ -66,6 +98,10 @@ class MeshCoordinator(
             scannerState = ScannerState.Idle,
             neighbors = emptyList(),
             sosMessages = emptyList(),
+            performanceStats = PerformanceStats(),
+            currentPowerMode = MeshConfig.PowerMode.NORMAL,
+            impactDetected = false,
+            incidents = emptyList()
         ),
     )
 
@@ -76,9 +112,8 @@ class MeshCoordinator(
         scope.launch {
             scanner.observations.collect { observation ->
                 neighbors.record(observation.device, observation.rssi, observation.observedAtElapsedMs)
+                performanceTracker.recordDiscovery()
                 
-                // Arbitration: Only connect if my ID is higher than the peer's Bluetooth address
-                // (Using address because we don't know their Node ID yet)
                 val myPseudoId = identityProvider.nodeId.toHex()
                 val peerPseudoId = observation.device.address.replace(":", "").lowercase()
                 
@@ -87,8 +122,6 @@ class MeshCoordinator(
                         Log.d("MESH", "Arbitration WON: Initiating connection to ${observation.device.address}")
                         gattClient.connect(observation.device)
                     }
-                } else {
-                    Log.v("MESH", "Arbitration LOST: Waiting for ${observation.device.address} to connect")
                 }
             }
         }
@@ -104,7 +137,6 @@ class MeshCoordinator(
                 handleTransportEvent(event)
             }
         }
-        // Periodic cleanup and maintenance
         scope.launch {
             while (true) {
                 delay(5_000)
@@ -129,10 +161,19 @@ class MeshCoordinator(
         }
     }
 
+    fun setPowerMode(mode: MeshConfig.PowerMode) {
+        _powerMode.value = mode
+        if (scanner.state.value == ScannerState.Scanning) {
+            stopDiscovery()
+            startDiscovery()
+        }
+    }
+
     fun startDiscovery() {
+        sensorProvider.start()
         gattServer.start()
-        advertiser.start()
-        scanner.start()
+        advertiser.start(_powerMode.value)
+        scanner.start(_powerMode.value)
     }
 
     fun stopDiscovery() {
@@ -140,21 +181,34 @@ class MeshCoordinator(
         advertiser.stop()
         gattClient.close()
         gattServer.stop()
+        sensorProvider.stop()
     }
 
     fun refreshNeighborLiveness() {
         neighbors.refreshLiveness()
     }
 
-    fun createSos(text: String) {
+    fun createSos(
+        text: String, 
+        priority: Int = 0, 
+        category: com.rescuemesh.app.protocol.EmergencyCategory = com.rescuemesh.app.protocol.EmergencyCategory.EMERGENCY_CATEGORY_UNSPECIFIED
+    ) {
         scope.launch {
+            val location = locationProvider.getCurrentLocation()
+            val impact = sensorProvider.impactDetected.value
             val message = SosFactory.create(
                 originNodeId = identityProvider.nodeId,
                 text = text,
+                securityProvider = securityProvider,
+                category = category,
+                originRole = identityProvider.nodeRole,
+                location = location,
+                impactDetected = impact,
+                priority = priority
             )
+            performanceTracker.trackMessageStart(message.messageId.toByteArray().toHex())
             val inserted = repository.persistCreatedMessage(message)
             if (inserted) {
-                Log.i("SOS", "Message created and persisted: ${message.messageId.toByteArray().toDisplayNodeId()}")
                 val forwards = gattClient.sendMeshMessage(message)
                 Log.i("ROUTE", "Initial route selected for SOS: forwards_started=$forwards")
             }
@@ -164,7 +218,7 @@ class MeshCoordinator(
     private suspend fun handleTransportEvent(event: BleTransportEvent) {
         when (event) {
             is BleTransportEvent.Connected -> {
-                Log.d("MESH", "Connected to ${event.device.address}, flushing messages")
+                performanceTracker.recordConnection(true)
                 flushPendingMessages()
             }
             is BleTransportEvent.Disconnected -> {
@@ -176,7 +230,6 @@ class MeshCoordinator(
                         state = "DISCONNECTED",
                         protocolVersion = 1,
                     )
-                    Log.i("MESH", "Known peer unavailable: ${peerNodeId.toDisplayNodeId()}")
                 }
             }
             is BleTransportEvent.AckReceived -> {
@@ -198,40 +251,56 @@ class MeshCoordinator(
                 flushPendingMessages()
             }
             is BleTransportEvent.MessageReceived -> {
+                val message = event.message
+                
+                // Replay protection (Phase 8)
+                val now = System.currentTimeMillis()
+                if (message.createdAtMs < now - MeshConfig.SOS_LIFETIME_MS || message.createdAtMs > now + 60_000) {
+                    Log.w("SECURITY", "Dropping stale/future message")
+                    return
+                }
+
+                // Integrity Check: Verify signature
+                val isValid = if (message.signature.size() > 0 && message.publicKey.size() > 0) {
+                    val unsignedBytes = message.toBuilder().clearSignature().build().toByteArray()
+                    securityProvider.verify(
+                        message.publicKey.toByteArray(),
+                        unsignedBytes,
+                        message.signature.toByteArray()
+                    )
+                } else false
+
+                if (!isValid) {
+                    Log.e("SECURITY", "Invalid signature or unsigned message from ${event.device.address}")
+                    return
+                }
+
                 val result = repository.persistReceivedMessage(
-                    message = event.message,
-                    sourceNodeId = event.sourcePeerNodeId ?: event.message.originNodeId.toByteArray(),
+                    message = message,
+                    sourceNodeId = event.sourcePeerNodeId ?: message.originNodeId.toByteArray(),
                 )
                 when (result) {
                     is ReceiveResult.Accepted -> {
-                        Log.i("ROOM", "Message persisted: ${event.message.messageId.toByteArray().toDisplayNodeId()}")
-                        gattServer.acknowledgeMessagePersisted(event.device, event.message.messageId.toByteArray())
+                        gattServer.acknowledgeMessagePersisted(event.device, message.messageId.toByteArray())
                         if (result.relayCopy.ttl > 0) {
-                            val forwards = gattClient.sendMeshMessage(
+                            gattClient.sendMeshMessage(
                                 message = result.relayCopy,
                                 excludePeerNodeId = event.sourcePeerNodeId,
                             )
-                            if (forwards == 0) {
-                                Log.i("ROUTE", "No suitable next hop; message remains queued")
-                            }
                         }
                     }
                     ReceiveResult.Duplicate -> {
-                        Log.i("MESH", "Duplicate rejected: ${event.message.messageId.toByteArray().toDisplayNodeId()}")
-                        gattServer.acknowledgeMessagePersisted(event.device, event.message.messageId.toByteArray())
+                        performanceTracker.recordDuplicateRejected()
+                        gattServer.acknowledgeMessagePersisted(event.device, message.messageId.toByteArray())
                     }
-                    is ReceiveResult.Rejected -> {
-                        Log.i("MESH", "Message rejected: ${result.reason}")
-                    }
+                    else -> Unit
                 }
             }
             is BleTransportEvent.MessageAckReceived -> {
                 repository.markRelayed(event.messageId)
-                Log.i("SOS", "Message delivered/relayed: ${event.messageId.toDisplayNodeId()}")
+                performanceTracker.recordMessageDelivered(event.messageId.toHex())
             }
-            is BleTransportEvent.Error -> {
-                Log.w("MESH", "Transport error with ${event.device?.address}: ${event.reason}")
-            }
+            is BleTransportEvent.Error -> performanceTracker.recordConnection(false)
             else -> Unit
         }
     }
@@ -239,11 +308,14 @@ class MeshCoordinator(
     private suspend fun flushPendingMessages() {
         val nowMs = System.currentTimeMillis()
         repository.pendingMessages()
-            .filter { ForwardingPolicy.isForwardable(it, nowMs) }
-            .map { it.toProto() }
-            .forEach { message ->
-                val forwards = gattClient.sendMeshMessage(message)
-                Log.i("ROUTE", "Queued message flush: ${message.messageId.toByteArray().toDisplayNodeId()} forwards_started=$forwards")
+            .forEach { entity ->
+                if (ForwardingPolicy.isForwardable(entity, nowMs)) {
+                    val message = entity.toProto()
+                    gattClient.sendMeshMessage(
+                        message = message,
+                        excludePeerNodeId = entity.previousHopNodeId
+                    )
+                }
             }
     }
 }
@@ -254,6 +326,10 @@ data class MeshDiscoveryUiState(
     val scannerState: ScannerState,
     val neighbors: List<NeighborUiModel>,
     val sosMessages: List<SosUiModel>,
+    val performanceStats: PerformanceStats,
+    val currentPowerMode: MeshConfig.PowerMode,
+    val impactDetected: Boolean,
+    val incidents: List<com.rescuemesh.app.data.IncidentEntity>
 ) {
     val activeNeighborCount: Int
         get() = neighbors.count { it.liveness == NeighborLiveness.Active }
@@ -265,6 +341,9 @@ data class SosUiModel(
     val state: String,
     val ttl: Int,
     val hopCount: Int,
+    val priority: Int,
+    val latitude: Double?,
+    val longitude: Double?
 )
 
 data class NeighborUiModel(
@@ -277,6 +356,7 @@ data class NeighborUiModel(
     val peerNodeId: String?,
     val peerNodeIdBytes: ByteArray?,
     val lastPacketState: String?,
+    val role: com.rescuemesh.app.protocol.NodeRole? = null
 )
 
 enum class NeighborLiveness {
@@ -353,12 +433,14 @@ private class MutableNeighborTable {
                 peerNodeId = event.peerNodeId.toDisplayNodeId(),
                 peerNodeIdBytes = event.peerNodeId,
                 lastPacketState = "HELLO received",
+                role = event.role
             )
             is BleTransportEvent.AckReceived -> previous.copyOrPlaceholder(key).copy(
                 connectionState = "ACK_RECEIVED",
                 peerNodeId = event.peerNodeId.toDisplayNodeId(),
                 peerNodeIdBytes = event.peerNodeId,
-                lastPacketState = "ACK notification received",
+                lastPacketState = "ACK received",
+                role = event.role
             )
             is BleTransportEvent.Error -> previous.copyOrPlaceholder(key).copy(
                 connectionState = "ERROR",
@@ -400,8 +482,8 @@ private class MutableNeighborTable {
 
     private fun liveness(ageMs: Long): NeighborLiveness {
         return when {
-            ageMs <= 5_000 -> NeighborLiveness.Active
-            ageMs <= 15_000 -> NeighborLiveness.Stale
+            ageMs <= MeshConfig.NEIGHBOR_STALE_TIMEOUT_MS -> NeighborLiveness.Active
+            ageMs <= MeshConfig.NEIGHBOR_LOST_TIMEOUT_MS -> NeighborLiveness.Stale
             else -> NeighborLiveness.Lost
         }
     }

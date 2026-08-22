@@ -12,6 +12,8 @@ class MessageRepository(
 
     fun observeNeighbors(): Flow<List<NeighborEntity>> = dao.observeNeighbors()
 
+    fun observeIncidents(): Flow<List<IncidentEntity>> = dao.observeIncidents()
+
     suspend fun ensureNodeIdentity(nodeId: ByteArray, nowMs: Long = System.currentTimeMillis()) {
         dao.upsertIdentity(
             NodeIdentityEntity(
@@ -47,6 +49,7 @@ class MessageRepository(
         val entity = message.toEntity(
             state = "PERSISTED",
             receivedAtMs = nowMs,
+            previousHopNodeId = null
         )
         val receipt = MessageReceiptEntity(
             messageId = message.messageId.toByteArray(),
@@ -74,19 +77,53 @@ class MessageRepository(
             sourceNodeId = sourceNodeId,
             processed = true,
         )
+        val entity = relayCopy.toEntity(
+            state = "QUEUED",
+            receivedAtMs = nowMs,
+            previousHopNodeId = sourceNodeId
+        )
         val inserted = dao.acceptNewMessage(
             receipt = receipt,
-            message = relayCopy.toEntity(
-                state = "QUEUED",
-                receivedAtMs = nowMs,
-            ),
+            message = entity,
         )
-        return if (inserted) {
+        if (inserted) {
             Log.i("ROOM", "Received message persisted")
-            ReceiveResult.Accepted(relayCopy)
+            aggregateMessageIntoIncident(entity)
+            return ReceiveResult.Accepted(relayCopy)
         } else {
             Log.i("ROOM", "Duplicate receipt ignored")
-            ReceiveResult.Duplicate
+            return ReceiveResult.Duplicate
+        }
+    }
+
+    private suspend fun aggregateMessageIntoIncident(message: MessageEntity) {
+        if (message.latitude == null || message.longitude == null) return
+        
+        val threshold = 0.001 // Approx 100m
+        val existing = dao.findMatchingIncident(
+            category = message.category,
+            latMin = message.latitude - threshold,
+            latMax = message.latitude + threshold,
+            lonMin = message.longitude - threshold,
+            lonMax = message.longitude + threshold
+        )
+
+        if (existing != null) {
+            dao.upsertIncident(existing.copy(
+                corroboratingCount = existing.corroboratingCount + 1,
+                lastUpdatedAtMs = message.receivedAtMs,
+                summary = "${existing.summary.take(100)}... (+${existing.corroboratingCount} more reports)"
+            ))
+        } else {
+            dao.upsertIncident(IncidentEntity(
+                category = message.category,
+                latitude = message.latitude,
+                longitude = message.longitude,
+                corroboratingCount = 1,
+                firstSeenAtMs = message.receivedAtMs,
+                lastUpdatedAtMs = message.receivedAtMs,
+                summary = message.payload.decodeToString()
+            ))
         }
     }
 
@@ -106,7 +143,7 @@ sealed interface ReceiveResult {
 }
 
 fun MessageEntity.toProto(): MeshMessage {
-    return MeshMessage.newBuilder()
+    val builder = MeshMessage.newBuilder()
         .setMessageId(com.google.protobuf.ByteString.copyFrom(messageId))
         .setOriginNodeId(com.google.protobuf.ByteString.copyFrom(originNodeId))
         .setDestinationId(com.google.protobuf.ByteString.copyFrom(destinationId ?: ByteArray(0)))
@@ -119,12 +156,27 @@ fun MessageEntity.toProto(): MeshMessage {
         .setPayloadVersion(payloadVersion)
         .setPayload(com.google.protobuf.ByteString.copyFrom(payload))
         .setSignature(com.google.protobuf.ByteString.copyFrom(signature ?: ByteArray(0)))
-        .build()
+        .setPublicKey(com.google.protobuf.ByteString.copyFrom(publicKey ?: ByteArray(0)))
+        .setCategory(com.rescuemesh.app.protocol.EmergencyCategory.forNumber(category))
+        .setOriginRole(com.rescuemesh.app.protocol.NodeRole.forNumber(originRole))
+
+    if (latitude != null && longitude != null) {
+        builder.setLocation(
+            com.rescuemesh.app.protocol.Location.newBuilder()
+                .setLatitude(latitude)
+                .setLongitude(longitude)
+                .setAccuracy(locationAccuracy ?: 0f)
+                .build()
+        )
+    }
+    
+    return builder.build()
 }
 
 fun MeshMessage.toEntity(
     state: String,
     receivedAtMs: Long,
+    previousHopNodeId: ByteArray? = null
 ): MessageEntity {
     return MessageEntity(
         messageId = messageId.toByteArray(),
@@ -138,9 +190,16 @@ fun MeshMessage.toEntity(
         expiresAtMs = expiresAtMs,
         payloadVersion = payloadVersion,
         payload = payload.toByteArray(),
-        signature = signature.takeIf { !it.isEmpty }?.toByteArray(),
+        signature = if (signature.size() > 0) signature.toByteArray() else null,
         state = state,
         receivedAtMs = receivedAtMs,
         lastForwardedAtMs = null,
+        previousHopNodeId = previousHopNodeId,
+        latitude = if (hasLocation()) location.latitude else null,
+        longitude = if (hasLocation()) location.longitude else null,
+        locationAccuracy = if (hasLocation()) location.accuracy else null,
+        publicKey = if (publicKey.size() > 0) publicKey.toByteArray() else null,
+        category = category.number,
+        originRole = originRole.number
     )
 }

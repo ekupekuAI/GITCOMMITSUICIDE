@@ -21,8 +21,14 @@ interface MessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertIdentity(identity: NodeIdentityEntity)
 
-    @Insert
-    suspend fun insertForwardAttempt(attempt: ForwardAttemptEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertIncident(incident: IncidentEntity): Long
+
+    @Query("SELECT * FROM incidents ORDER BY last_updated_at_ms DESC")
+    fun observeIncidents(): Flow<List<IncidentEntity>>
+
+    @Query("SELECT * FROM incidents WHERE category = :category AND latitude BETWEEN :latMin AND :latMax AND longitude BETWEEN :lonMin AND :lonMax LIMIT 1")
+    suspend fun findMatchingIncident(category: Int, latMin: Double, latMax: Double, lonMin: Double, lonMax: Double): IncidentEntity?
 
     @Query("SELECT * FROM messages ORDER BY created_at_ms DESC")
     fun observeMessages(): Flow<List<MessageEntity>>

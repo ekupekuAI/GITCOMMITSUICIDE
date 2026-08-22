@@ -55,6 +55,20 @@ data class MessageEntity(
     val receivedAtMs: Long,
     @ColumnInfo(name = "last_forwarded_at_ms")
     val lastForwardedAtMs: Long?,
+    @ColumnInfo(name = "previous_hop_node_id", typeAffinity = ColumnInfo.BLOB)
+    val previousHopNodeId: ByteArray?,
+    @ColumnInfo(name = "latitude")
+    val latitude: Double?,
+    @ColumnInfo(name = "longitude")
+    val longitude: Double?,
+    @ColumnInfo(name = "location_accuracy")
+    val locationAccuracy: Float?,
+    @ColumnInfo(name = "public_key", typeAffinity = ColumnInfo.BLOB)
+    val publicKey: ByteArray?,
+    @ColumnInfo(name = "category")
+    val category: Int,
+    @ColumnInfo(name = "origin_role")
+    val originRole: Int,
 )
 
 @Entity(tableName = "message_receipts")
@@ -108,4 +122,24 @@ data class ForwardAttemptEntity(
     val result: String,
     @ColumnInfo(name = "reason")
     val reason: String,
+)
+
+@Entity(tableName = "incidents")
+data class IncidentEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    @ColumnInfo(name = "category")
+    val category: Int,
+    @ColumnInfo(name = "latitude")
+    val latitude: Double,
+    @ColumnInfo(name = "longitude")
+    val longitude: Double,
+    @ColumnInfo(name = "corroborating_count")
+    val corroboratingCount: Int,
+    @ColumnInfo(name = "first_seen_at_ms")
+    val firstSeenAtMs: Long,
+    @ColumnInfo(name = "last_updated_at_ms")
+    val lastUpdatedAtMs: Long,
+    @ColumnInfo(name = "summary")
+    val summary: String,
 )

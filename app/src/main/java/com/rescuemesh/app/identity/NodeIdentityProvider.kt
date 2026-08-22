@@ -1,6 +1,7 @@
 package com.rescuemesh.app.identity
 
 import android.content.Context
+import com.rescuemesh.app.protocol.NodeRole
 import java.security.SecureRandom
 
 class NodeIdentityProvider(
@@ -27,12 +28,20 @@ class NodeIdentityProvider(
         get() = preferences.getString(KEY_NODE_NAME, "") ?: ""
         set(value) = preferences.edit().putString(KEY_NODE_NAME, value).apply()
 
+    var nodeRole: NodeRole
+        get() {
+            val ordinal = preferences.getInt(KEY_NODE_ROLE, NodeRole.NODE_ROLE_PUBLIC_RELAY_VALUE)
+            return NodeRole.forNumber(ordinal) ?: NodeRole.NODE_ROLE_PUBLIC_RELAY
+        }
+        set(value) = preferences.edit().putInt(KEY_NODE_ROLE, value.number).apply()
+
     val displayId: String
         get() = nodeName.ifBlank { nodeId.toDisplayNodeId() }
 
     private companion object {
         const val KEY_NODE_ID = "node_id"
         const val KEY_NODE_NAME = "node_name"
+        const val KEY_NODE_ROLE = "node_role"
         const val NODE_ID_BYTES = 16
     }
 }
