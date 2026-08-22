@@ -3,14 +3,7 @@ package com.rescuemesh.app.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -20,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -36,11 +30,12 @@ fun GlassPanel(
 ) {
     Surface(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(20.dp))
             .border(
-                BorderStroke(1.dp, GlassBorder),
-                RoundedCornerShape(16.dp),
-            ),
+                BorderStroke(1.dp, Brush.linearGradient(listOf(GlassBorder, Color.Transparent))),
+                RoundedCornerShape(20.dp),
+            )
+            .shadow(elevation = 2.dp, shape = RoundedCornerShape(20.dp)),
         color = color,
         content = content,
     )
@@ -55,18 +50,17 @@ fun StatusTile(
 ) {
     GlassPanel(modifier = modifier) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp),
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(label, color = TextSecondary, style = MaterialTheme.typography.labelMedium)
-            Text(value, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
+            Text(label, color = TextSecondary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text(value, fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineSmall, color = Color.White)
             Box(
                 modifier = Modifier
-                    .height(2.dp)
-                    .fillMaxWidth()
-                    .background(
-                        Brush.horizontalGradient(listOf(accent, Color.Transparent)),
-                    ),
+                    .height(4.dp)
+                    .fillMaxWidth(0.4f)
+                    .clip(CircleShape)
+                    .background(accent)
             )
         }
     }
@@ -76,20 +70,20 @@ fun StatusTile(
 fun StatusPill(label: String, accent: Color) {
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(Color.White.copy(alpha = 0.08f))
-            .border(BorderStroke(1.dp, accent.copy(alpha = 0.45f)), RoundedCornerShape(999.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.05f))
+            .border(BorderStroke(1.dp, accent.copy(alpha = 0.3f)), CircleShape)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(7.dp)
+                .size(6.dp)
                 .clip(CircleShape)
                 .background(accent),
         )
-        Text(label, style = MaterialTheme.typography.labelMedium)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -97,9 +91,10 @@ fun StatusPill(label: String, accent: Color) {
 fun SectionTitle(text: String) {
     Text(
         text = text,
-        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-        color = Color(0xFFE8EDF4),
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+        color = Color.White.copy(alpha = 0.6f),
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Black,
+        letterSpacing = androidx.compose.ui.unit.TextUnit.Unspecified
     )
 }

@@ -9,25 +9,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -63,7 +57,7 @@ class MainActivity : ComponentActivity() {
 
 sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
     object Home : Screen("home", "Home", Icons.Default.Home)
-    object SOS : Screen("sos", "SOS", Icons.Default.Info)
+    object SOS : Screen("sos", "SOS", Icons.Default.Warning)
     object Neighbors : Screen("neighbors", "Nearby", Icons.Default.Person)
     object Messages : Screen("messages", "Messages", Icons.Default.List)
     object Topology : Screen("topology", "Topology", Icons.Default.LocationOn)
@@ -124,17 +118,38 @@ private fun RescueMeshApp() {
     }
 
     Scaffold(
+        modifier = Modifier.fillMaxSize(),
         bottomBar = {
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentDestination = navBackStackEntry?.destination
             
-            NavigationBar {
+            NavigationBar(
+                containerColor = Color(0xFF090B10),
+                contentColor = Color.White,
+                tonalElevation = 8.dp
+            ) {
                 val items = listOf(Screen.Home, Screen.Neighbors, Screen.Messages, Screen.Topology, Screen.Diagnostics, Screen.Settings)
                 items.forEach { screen ->
+                    val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
                     NavigationBarItem(
-                        icon = { Icon(screen.icon, contentDescription = screen.label) },
-                        label = { Text(screen.label) },
-                        selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                        icon = { 
+                            Icon(
+                                screen.icon, 
+                                contentDescription = screen.label,
+                                tint = if (selected) Color(0xFF4CD964) else Color.Gray
+                            ) 
+                        },
+                        label = { 
+                            Text(
+                                screen.label, 
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selected) Color.White else Color.Gray
+                            ) 
+                        },
+                        selected = selected,
+                        colors = NavigationBarItemDefaults.colors(
+                            indicatorColor = Color(0xFF4CD964).copy(alpha = 0.1f)
+                        ),
                         onClick = {
                             navController.navigate(screen.route) {
                                 popUpTo(navController.graph.findStartDestination().id) {
@@ -149,7 +164,13 @@ private fun RescueMeshApp() {
             }
         }
     ) { innerPadding ->
-        NavHost(navController, startDestination = Screen.Home.route, modifier = Modifier.padding(innerPadding)) {
+        NavHost(
+            navController, 
+            startDestination = Screen.Home.route, 
+            modifier = Modifier.padding(innerPadding),
+            enterTransition = { fadeIn(tween(300)) },
+            exitTransition = { fadeOut(tween(300)) }
+        ) {
             composable(Screen.Home.route) {
                 HomeScreen(
                     state = uiState,
