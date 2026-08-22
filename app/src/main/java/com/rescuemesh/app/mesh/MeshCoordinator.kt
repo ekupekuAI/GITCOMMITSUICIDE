@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class MeshCoordinator(
+    private val context: android.content.Context,
     private val identityProvider: NodeIdentityProvider,
     private val securityProvider: SecurityProvider,
     private val locationProvider: LocationProvider,
@@ -108,6 +109,8 @@ class MeshCoordinator(
     init {
         scope.launch {
             repository.ensureNodeIdentity(identityProvider.nodeId)
+            repository.runMaintenance() // Clean up on startup
+            clearAppCache()
         }
         scope.launch {
             scanner.observations.collect { observation ->
@@ -138,11 +141,18 @@ class MeshCoordinator(
             }
         }
         scope.launch {
+            var maintenanceCounter = 0
             while (true) {
                 delay(5_000)
                 neighbors.refreshLiveness()
                 cleanupStaleNeighbors()
                 flushPendingMessages()
+                
+                // Run database maintenance every 60 seconds
+                if (++maintenanceCounter >= 12) {
+                    repository.runMaintenance()
+                    maintenanceCounter = 0
+                }
             }
         }
     }
@@ -182,6 +192,22 @@ class MeshCoordinator(
         gattClient.close()
         gattServer.stop()
         sensorProvider.stop()
+        
+        // Final cleanup when engine stops
+        scope.launch {
+            repository.runMaintenance()
+            clearAppCache()
+        }
+    }
+
+    private fun clearAppCache() {
+        try {
+            context.cacheDir.deleteRecursively()
+            context.externalCacheDir?.deleteRecursively()
+            Log.i("MESH", "App cache and external cache cleared successfully")
+        } catch (e: Exception) {
+            Log.e("MESH", "Failed to clear cache: ${e.message}")
+        }
     }
 
     fun refreshNeighborLiveness() {

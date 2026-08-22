@@ -134,6 +134,21 @@ class MessageRepository(
     suspend fun markRelayed(messageId: ByteArray, nowMs: Long = System.currentTimeMillis()) {
         dao.markForwarded(messageId, "RELAYED", nowMs)
     }
+
+    suspend fun runMaintenance(nowMs: Long = System.currentTimeMillis()) {
+        // Delete messages older than 24h or expired
+        dao.deleteExpiredMessages(nowMs)
+        
+        // Delete neighbors not seen for more than 2 hours
+        val staleThreshold = nowMs - (2 * 60 * 60 * 1000L)
+        dao.deleteStaleNeighbors(staleThreshold)
+        
+        // Delete old receipts to keep database small
+        dao.deleteOldReceipts(staleThreshold)
+        
+        // Delete old incidents
+        dao.deleteOldIncidents(staleThreshold)
+    }
 }
 
 sealed interface ReceiveResult {

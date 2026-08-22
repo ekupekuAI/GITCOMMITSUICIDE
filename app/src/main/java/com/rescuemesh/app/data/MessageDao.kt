@@ -45,6 +45,18 @@ interface MessageDao {
     @Query("UPDATE messages SET state = :state, last_forwarded_at_ms = :forwardedAtMs WHERE message_id = :messageId")
     suspend fun markForwarded(messageId: ByteArray, state: String, forwardedAtMs: Long)
 
+    @Query("DELETE FROM messages WHERE expires_at_ms < :nowMs OR ttl <= 0")
+    suspend fun deleteExpiredMessages(nowMs: Long)
+
+    @Query("DELETE FROM neighbors WHERE last_seen_at_ms < :thresholdMs")
+    suspend fun deleteStaleNeighbors(thresholdMs: Long)
+
+    @Query("DELETE FROM message_receipts WHERE first_seen_at_ms < :thresholdMs")
+    suspend fun deleteOldReceipts(thresholdMs: Long)
+
+    @Query("DELETE FROM incidents WHERE last_updated_at_ms < :thresholdMs")
+    suspend fun deleteOldIncidents(thresholdMs: Long)
+
     @Transaction
     suspend fun acceptNewMessage(
         receipt: MessageReceiptEntity,

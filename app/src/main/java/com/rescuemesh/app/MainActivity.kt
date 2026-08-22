@@ -75,6 +75,7 @@ private fun RescueMeshApp() {
         val identityProvider = NodeIdentityProvider(context)
         val repository = MessageRepository(AppDatabase.get(context).messageDao())
         MeshCoordinator(
+            context = context.applicationContext,
             identityProvider = identityProvider,
             securityProvider = SecurityProvider(),
             locationProvider = LocationProvider(context),

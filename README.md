@@ -17,6 +17,7 @@ RescueMesh implements an opportunistic store-and-forward mesh over BLE. Each dev
 - **Verified Authenticity**: All emergency signals are digitally signed using the Android KeyStore (ECC SHA256) to prevent tampering.
 - **Responder Roles**: Capability-aware routing that identifies and prioritizes nodes with specific skills (Medical, Fire, etc.).
 - **Incident Aggregation**: Automatically clusters nearby similar reports into a single event to reduce network flood.
+- **Self-Cleaning Storage**: Automatically purges expired messages, stale neighbor logs, and internal app cache on startup and shutdown.
 - **Device Location**: Attaches real GPS coordinates to SOS messages when available (using FusedLocationProvider).
 - **Hybrid Call Path**: One-touch dialing for local emergency services (112 in India) when cellular signal is present.
 
