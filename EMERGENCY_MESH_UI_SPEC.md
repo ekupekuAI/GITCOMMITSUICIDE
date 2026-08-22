@@ -1,881 +1,2464 @@
-# Emergency Communication Mesh
-## Android UI/UX Design Specification
+# INFRASTRUCTURE-INDEPENDENT EMERGENCY COMMUNICATION MESH
+# MASTER UI/UX + JETPACK COMPOSE IMPLEMENTATION SPECIFICATION
 
-**Audience:** Lead Android developer and Jetpack Compose implementation team  
-**Product posture:** Mission-critical, fast to scan, usable offline, explicit about uncertainty  
-**Primary users:** Field responders, incident coordinators, and people requesting help
+## ROLE
 
----
+You are the lead Android UI engineer and UI/UX implementation specialist.
 
-## 1. Product Principles
+Build a professional Android emergency-response interface for:
 
-1. **The next action is always obvious.** Every operational screen has one dominant action and a visible back path.
-2. **Truth before reassurance.** Show `Unknown`, `Stale`, `Failed`, and `Offline` explicitly. Never imply delivery when only local storage succeeded.
-3. **Severity is semantic, not decorative.** Color is paired with text, icon, and position so alerts remain understandable for color-blind users.
-4. **Local data remains useful.** Cached nodes, alerts, and messages remain visible with an age label when disconnected.
-5. **Prevent accidental SOS.** Sending an SOS is deliberate, but once confirmed it must be fast and resilient.
-6. **Battery is an operational constraint.** Surface battery and power-saving mode without blocking emergency use.
+"Infrastructure-Independent Emergency Communication Mesh"
 
----
+The application must communicate one core idea:
 
-## 2. Visual Direction
+A device should be able to create and exchange emergency messages through nearby devices and relay nodes even when normal internet infrastructure is unavailable.
 
-### Color tokens
+The UI must look like a professional emergency-response / disaster-response / communication operations system.
 
-Use Material 3 tokens with a restrained, high-contrast palette. Do not use color as the only status signal.
+It must NOT look like:
 
-| Token | Light value | Meaning |
-|---|---|---|
-| `emergencyCritical` | `#B3261E` | Immediate danger, active SOS, failed critical delivery |
-| `emergencyHigh` | `#C75B12` | Urgent response required |
-| `emergencyModerate` | `#8A6500` | Important but not immediately life-threatening |
-| `statusOnline` | `#176B3A` | Confirmed connected / delivered |
-| `statusDegraded` | `#8A6500` | Partial, stale, or uncertain connectivity |
-| `statusOffline` | `#5F6368` | No upstream path / device offline |
-| `surfaceBase` | `#F7F8F6` | App background |
-| `surfaceRaised` | `#FFFFFF` | Tool panels and list rows |
-| `inkPrimary` | `#1A1C19` | Main text |
-| `inkSecondary` | `#454744` | Supporting text |
-| `outline` | `#747873` | Dividers and controls |
+- A college CRUD project
+- A generic admin dashboard
+- A banking application
+- A social media application
+- A simple form application
+- A gaming interface
+- A colorful cartoon application
+- A generic Material demo
 
-Critical SOS banners use a solid critical token with white text, not a gradient. Critical actions use a filled button; destructive cancellation uses an outlined button with clear wording.
+The interface must prioritize:
 
-### Typography
+1. Emergency clarity
+2. Speed
+3. Reliability
+4. Network visibility
+5. Responder usability
+6. Accessibility
+7. Technical credibility
+8. Simple understanding
+9. Professional visual hierarchy
 
-Use a legible, non-condensed sans family available on the device, with tabular numerals for times, hop counts, and battery percentages. Suggested Material roles:
+DO NOT build the actual mesh networking protocol unless explicitly requested.
 
-- `headlineSmall`: screen title, 24sp
-- `titleMedium`: alert title and section title, 16sp medium
-- `bodyLarge`: primary operational copy, 16sp
-- `bodyMedium`: supporting copy, 14sp
-- `labelLarge`: buttons and status labels, 14sp medium
-- `labelSmall`: timestamps and metadata, 12sp
+Use clean mock/demo data where real backend/network services are not available.
 
-Minimum touch target: 48dp. Prefer short labels such as `Send SOS`, `Acknowledge`, `Retry`, and `Open map`. Avoid icon-only controls unless the icon is universally understood and has a tooltip/content description.
-
-### Surfaces and motion
-
-- Use flat, high-contrast list rows with 8dp corner radius; avoid nested cards and decorative illustrations.
-- Keep the top app bar compact and persistent on operational screens.
-- Use a short fade/slide for newly received alerts and a restrained pulse only for an unacknowledged critical SOS.
-- Respect `Reduced motion`; replace animation with a static `NEW` label.
-- Never hide an alert or status change behind animation.
+Structure the code so real networking services can later replace mock implementations.
 
 ---
 
-## 3. Navigation Structure
+# 1. CORE PRODUCT CONCEPT
 
-Use a `NavigationSuiteScaffold` or adaptive equivalent:
+The application connects emergency users and responders through a local mesh.
 
-### Primary destinations
+Concept:
 
-1. **Dashboard** - operational overview and dominant emergency actions
-2. **Alerts** - received and created SOS alerts
-3. **Messages** - mesh message queue and delivery details
-4. **Network** - node list, topology, and local device status
+USER
+  ↓
+LOCAL NODE DISCOVERY
+  ↓
+RELAY NODE
+  ↓
+RELAY NODE
+  ↓
+RESPONDER
+  ↓
+EMERGENCY DELIVERED
 
-On compact screens these are a bottom navigation bar. On expanded screens use a navigation rail with labels. Preserve the selected destination across rotation and process recreation.
+The application should visually demonstrate:
 
-### Secondary routes
-
-- Dashboard -> `Create SOS`
-- Dashboard / Alerts -> `Alert detail`
-- Messages -> `Message detail`
-- Network -> `Node detail`
-- Network -> `Topology`
-- Any screen -> `Settings and power`
-
-A persistent global critical alert strip appears below the top app bar when an unacknowledged critical SOS exists. Tapping it opens the highest-priority alert detail.
-
----
-
-## 4. Emergency Alert Hierarchy
-
-Every alert has a severity, lifecycle, source, confidence, and delivery state.
-
-### Severity order
-
-1. **Critical / Red:** immediate threat to life; requires rapid acknowledgement
-2. **High / Orange:** urgent assistance required
-3. **Moderate / Amber:** assistance needed, not immediately life-threatening
-4. **Low / Gray:** information or welfare check
-
-### Alert precedence
-
-`Critical unacknowledged` > `Critical acknowledged` > `High unacknowledged` > `High acknowledged` > `Moderate` > `Low`.
-
-A critical alert must show: severity word, source identifier, relative age, location confidence, delivery confidence, and current acknowledgement state. Use an icon plus text: triangle/exclamation for critical, not just a red dot.
-
-### Lifecycle labels
-
-`Draft` -> `Queued locally` -> `Relaying` -> `Delivered` -> `Acknowledged` -> `Resolved`  
-Failure branches: `Retrying`, `No route`, `Expired`, `Delivery uncertain`.
+- Node discovery
+- Network availability
+- Relay discovery
+- Multi-hop communication
+- Message queueing
+- Message delivery
+- Connection failures
+- Route recovery
+- Emergency severity
+- Responder coordination
 
 ---
 
-## 5. Dashboard Screen
+# 2. PRIMARY USER TYPES
 
-### Purpose
-Provide a fast operational readout and direct access to SOS creation, active alerts, network health, and the responder workload.
+Support two major user experiences.
 
-### Components
+## A. Emergency User
 
-- Compact top app bar: app name, local node ID, settings icon
-- Persistent offline/degraded banner when applicable
-- Critical alert strip with count and highest-priority alert
-- **Primary SOS action:** full-width `Send SOS` button
-- Current node status row: node ID, role (`Responder`, `Requester`, `Relay`), battery, last sync
-- Network summary: reachable nodes, active routes, relay queue, last topology update
-- Message summary: queued, relaying, delivered, failed
-- Received SOS preview list, sorted by hierarchy
-- Responder queue preview: `Needs acknowledgement`, `Assigned to me`, `Nearby`
-- Last updated label for every cached summary
+The user needs to:
 
-### Buttons/actions
+- See current network status
+- See their node status
+- Create SOS
+- Select severity
+- Send emergency messages
+- See SOS delivery progress
+- See relay hops
+- See nearby nodes
+- Understand offline mode
+- Understand failures
+- See responder acknowledgement
+- Monitor battery
 
-- `Send SOS`
-- `View all alerts`
-- `Open network`
-- `Open messages`
-- Tap any alert preview to open detail
-- Tap node status to open local node status
+## B. Responder
 
-### Important information
+The responder needs to:
 
-- Whether this device can currently relay an emergency message
-- Whether the local node has a route to another node or gateway
-- Number of unacknowledged alerts
-- Battery percentage and estimated operating mode
-- Age of network data; use `Updated 14s ago`, not an unlabeled spinner
-
-### Emergency states
-
-- **Critical alert present:** critical strip is pinned directly under the app bar; dashboard content remains usable.
-- **SOS currently active:** primary action changes to `View active SOS`; show status and elapsed time.
-- **Low battery:** persistent amber battery row with `Power settings` action; do not disable SOS.
-- **Multiple critical alerts:** show count and highest-priority preview; do not rotate content automatically.
-
-### Failure states
-
-- Network query failed: retain cached values and show `Network data unavailable` with `Retry`.
-- Dashboard sync failed: show exact age of data and `Last confirmed` timestamp.
-- Local storage unavailable: show a blocking error only for affected actions, with `Try again`.
-
-### Empty states
-
-- No active alerts: `No active SOS alerts` plus current network state.
-- No messages: `No messages in queue`.
-- No nearby nodes: `No nodes heard recently`; show scan action on the Network destination.
+- See active emergencies
+- Prioritize critical incidents
+- View incident location
+- View relay path
+- View network topology
+- Acknowledge incidents
+- Mark incidents as responding
+- Send response messages
+- Monitor communication status
+- See affected nodes
+- Understand network health
 
 ---
 
-## 6. Create SOS Screen
+# 3. MAIN NAVIGATION
 
-### Purpose
-Let a person create a valid emergency request in seconds, including enough information for responders even when connectivity is intermittent.
+Use bottom navigation with four primary destinations:
 
-### Components
+1. Dashboard
+2. Network
+3. Messages
+4. Responder
 
-- Top app bar with `Cancel`
-- Severity selector: Critical, High, Moderate, Low; Critical selected by default only when configured by product policy
-- Situation type selector: Medical, Fire, Trapped, Missing person, Security, Other
-- Location block: coordinates or `Location unavailable`, accuracy, timestamp, permission state
-- Optional short description input with character count
-- People affected stepper: 1+ or `Unknown`
-- Optional responder callback/contact field
-- Attachment control only if offline-safe and size-limited
-- Delivery preview: local save, expected route, and current node battery
-- Full-width `Review SOS` action
+Suggested structure:
 
-### Buttons/actions
+APP
+│
+├── DASHBOARD
+│   ├── SOS Creation
+│   ├── SOS Status
+│   ├── Emergency Summary
+│   └── Device Status
+│
+├── NETWORK
+│   ├── Network Overview
+│   ├── Nearby Nodes
+│   ├── Topology
+│   ├── Routes
+│   └── Diagnostics
+│
+├── MESSAGES
+│   ├── All Messages
+│   ├── SOS Messages
+│   ├── Incoming
+│   ├── Outgoing
+│   └── Message Details
+│
+└── RESPONDER
+    ├── Active Incidents
+    ├── Incident Details
+    ├── Responder Actions
+    └── Response Messages
 
-- `Review SOS`
-- `Use current location`
-- `Add description`
-- `Remove attachment`
-- `Cancel` with discard confirmation if fields changed
+Settings can be accessible from the top app bar.
 
-### Important information
-
-- The SOS can be stored locally even without internet.
-- Location includes accuracy and capture age.
-- The user must distinguish `Saved on this device` from `Delivered to responders`.
-
-### Emergency states
-
-- Critical selection shows a clear confirmation warning and requires an explicit final send.
-- If an active SOS already exists, show it and offer `Update active SOS` rather than creating an accidental duplicate.
-- If location is stale, label it `Last location: 8 min ago` and allow send.
-
-### Failure states
-
-- Location permission denied: show manual location option and `Location unavailable`.
-- Required fields invalid: inline error adjacent to field; preserve entered values.
-- Attachment too large or unsupported: explain the limit and allow SOS without it.
-
-### Empty states
-
-- No location: structured empty block with `Use current location` and manual coordinates/place input.
-- No description: acceptable; do not treat optional description as an error.
+SOS must remain highly visible from Dashboard.
 
 ---
 
-## 7. SOS Review and Send Screen
+# 4. DASHBOARD
 
-### Purpose
-Give the sender one final, auditable confirmation before creating the emergency event.
+## Purpose
 
-### Components
+The dashboard is the emergency command center.
 
-- Severity and situation summary
-- Location, accuracy, and captured time
-- Description and affected-person count
-- Delivery route preview: `Direct`, `2 hops`, `No route currently known`
-- Local persistence statement
-- Full-width `Send SOS` button
-- Secondary `Edit` action
+The user should understand the current situation within seconds.
 
-### Buttons/actions
+## Required information
 
-- `Send SOS`
-- `Edit`
-- `Cancel`
+Display:
 
-### Important information
+- Mesh status
+- Node ID
+- Node role
+- Battery
+- Nearby nodes
+- Relay availability
+- Network reachability
+- Active emergency count
+- Latest message status
+- Current SOS status
+- Last synchronization
+- Offline status
 
-The send result must immediately state one of:
+## Layout
 
-- `Saved and relaying`
-- `Saved locally - no route`
-- `Delivered to node [ID]`
-- `Delivery uncertain - retrying`
+Top:
 
-### Emergency states
+EMERGENCY MESH
 
-After tapping send, disable duplicate submission, show an immediate local event ID, and keep the user on a status screen. The UI must remain useful if the process loses connectivity during submission.
+● MESH OPERATIONAL
 
-### Failure states
+Device:
+N-104
 
-Never show a generic success toast. A local database write failure is a hard failure with `Try again`; a network failure after local write is `Saved locally` with retry status.
+Battery:
+78%
 
-### Empty states
+Nearby Nodes:
+6
 
-Not applicable after review data exists. If state is lost, restore the draft or show `No SOS draft found` with `Return to dashboard`.
+Relay Paths:
+3
 
----
+Large central action:
 
-## 8. Active SOS Status Screen
+[ SEND SOS ]
 
-### Purpose
-Show the sender exactly what happened to their SOS and whether responders have acknowledged it.
+Then:
 
-### Components
+NETWORK STATUS
 
-- Large status word and severity
-- Event ID and creation time
-- Delivery progress timeline: Created, Queued, Relaying, Delivered, Acknowledged
-- Hop count and last relay node
-- Location and location age
-- Responder acknowledgement area
-- Update/cancel controls subject to policy
-- Retry route action when available
+● Mesh operational
+● Bluetooth available
+● Wi-Fi Direct available
+○ Internet unavailable
 
-### Buttons/actions
+Then:
 
-- `Retry now`
-- `Update SOS`
-- `Cancel SOS` with typed/explicit confirmation
-- `View relay path`
+ACTIVE EMERGENCIES
 
-### Important information
+🔴 1 Critical
+🟠 2 High
+🟡 3 Moderate
 
-Display both `last attempt` and `last confirmed` times. Show `Acknowledged by [node/responder]` only when an acknowledgement packet is actually received.
+Then:
 
-### Emergency states
+LATEST ACTIVITY
 
-- Critical unacknowledged: persistent alert treatment and visible elapsed time.
-- Delivered but not acknowledged: clear distinction; delivery is not responder receipt.
-- Acknowledged: show acknowledgement source and time.
+SOS #A104
+Relaying • 3 hops
 
-### Failure states
+## Dashboard quick actions
 
-- No route: `Stored locally. No route found.` Keep retry available.
-- Relay timeout: show last known hop and `Route stalled`.
-- Duplicate update conflict: preserve existing SOS and ask user to retry the update.
+Provide quick access to:
 
-### Empty states
-
-- No relay details yet: `Waiting for first relay attempt`.
-- No acknowledgement: `No acknowledgement received` is a valid state, not an error.
+- Send SOS
+- Nearby Nodes
+- Network Topology
+- Messages
+- Active Alerts
 
 ---
 
-## 9. Received SOS Alerts Screen
+# 5. SOS CREATION
 
-### Purpose
-Give responders a prioritized, filterable queue of incoming emergency events.
+The SOS workflow must be extremely simple.
 
-### Components
+## Required fields
 
-- Top app bar with unread count and filter control
-- Segmented filter: All, Unacknowledged, Nearby, Assigned to me
-- Sort control: severity first, newest, distance
-- Alert rows containing severity, situation, source ID, age, distance/location confidence, delivery state, acknowledgement state
-- Pull-to-refresh or explicit refresh that works with cached data
-- Offline banner and data age labels
+- Severity
+- Emergency type
+- Optional description
+- Location
+- Location accuracy
+- Node ID
 
-### Buttons/actions
+## Emergency types
 
-- Tap row: open alert detail
-- `Acknowledge` from row for configured roles
-- `Assign to me` from row where supported
-- `Filter`
-- `Mark reviewed` for non-critical alerts
+Include useful categories:
 
-### Important information
+- Medical
+- Fire
+- Trapped Person
+- Accident
+- Natural Disaster
+- Security Threat
+- Missing Person
+- Infrastructure Failure
+- Other
 
-A row must be scannable in under two seconds: severity word, event ID or source, age, location confidence, and whether another responder acknowledged it.
+Do not overwhelm the user.
 
-### Emergency states
+Use a clear grid/list of emergency types.
 
-New critical rows appear at the top and use a one-time visual entrance cue. Keep them pinned until acknowledged or resolved.
+## Severity
 
-### Failure states
+CRITICAL
+HIGH
+MODERATE
 
-- Sync failure: preserve cached list with `Last received ...`.
-- Malformed alert: show `Unreadable alert [ID]`; retain raw packet access for diagnostics if permitted.
-- Duplicate alert: group by event ID and show relay count, not multiple competing rows.
+Critical must be visually dominant.
 
-### Empty states
+## Location
 
-- No alerts: `No SOS alerts received` plus last sync time.
-- No results for filter: `No unacknowledged alerts` with `Clear filter`.
+Show:
 
----
+LOCATION
 
-## 10. Alert Detail / Responder View
+● GPS AVAILABLE
 
-### Purpose
-Support the responder's complete workflow from assessment through acknowledgement, assignment, relay, and resolution.
+Accuracy:
+± 12 m
 
-### Components
+If unavailable:
 
-- Severity header with event lifecycle state
-- Source node, event ID, creation age, and last packet time
-- Situation description and affected-person count
-- Location map/coordinate panel with accuracy ring and stale indicator
-- Relay path summary: hop count, last known relay, route confidence
-- Responder action bar
-- Activity timeline: received, relayed, acknowledged, assigned, updated
-- Related messages and attachments
-- Resolution field and audit history
+⚠ LOCATION UNAVAILABLE
 
-### Buttons/actions
+Allow the user to continue if the system supports manual/approximate location.
 
-- `Acknowledge`
-- `Assign to me`
-- `Relay alert`
-- `Send update`
-- `Open location`
-- `Mark resolved`
-- `Report incorrect`
+## SOS confirmation
 
-### Important information
+Before final transmission:
 
-Acknowledging means the responder has seen the alert, not that help has arrived. Assignment and resolution are separate actions. Every action shows its local timestamp and delivery state.
+CRITICAL SOS
 
-### Emergency states
+Emergency:
+Medical
 
-- Critical: acknowledge action is dominant; unresolved critical alerts retain the critical header.
-- Assigned: show responder identity and assignment time.
-- Resolved: retain the full audit trail; do not erase the alert.
+Location:
+Available
 
-### Failure states
+Network:
+3 relay paths
 
-- Cannot acknowledge upstream: save acknowledgement locally and show `Acknowledgement queued`.
-- Cannot relay: show `Relay failed`, route reason if known, and `Retry`.
-- Location unavailable: preserve coordinates/source text and show confidence as `Unknown`.
-
-### Empty states
-
-- No description: show `No description provided`.
-- No activity yet: show receipt event only.
-- No route data: show `Relay path unavailable`.
+[ SEND SOS ]
 
 ---
 
-## 11. Messages Screen
+# 6. SOS TRANSMISSION STATUS
 
-### Purpose
-Expose the mesh message queue and make delivery uncertainty understandable.
+Use a visual timeline.
 
-### Components
+CREATED
+ ↓
+QUEUED
+ ↓
+BROADCAST
+ ↓
+RELAYING
+ ↓
+RESPONDER FOUND
+ ↓
+DELIVERED
 
-- Tabs: Outbox, Inbox, Failed
-- Message rows: type, event ID, priority, status, hop count, attempts, age
-- Status filter
-- Retry controls for failed messages
-- Queue capacity indicator
+Show:
 
-### Buttons/actions
+- SOS ID
+- Current status
+- Number of hops
+- Relay nodes
+- Transmission time
+- Last successful relay
+- Current route
+- Retry/recovery state
 
-- Tap row: message detail
-- `Retry failed`
-- `Clear delivered` with confirmation
-- `Filter`
+Example:
 
-### Important information
+SOS #A104
 
-Use explicit statuses: `Queued locally`, `Relaying`, `Delivered to next node`, `Delivered`, `Failed`, `Expired`, `Unknown`. `Delivered to next node` is not the same as final delivery.
+🔴 CRITICAL
 
-### Emergency states
+✓ Created
+✓ Broadcast
+✓ N207 relay
+✓ N312 relay
+◉ Responder reached
 
-Critical messages are pinned above normal messages and cannot be bulk-cleared while unresolved.
+3 HOPS
 
-### Failure states
+12.4 SEC
 
-Queue full: show capacity and require a policy decision; never silently discard critical messages. Corrupt packet: isolate it and expose event ID.
-
-### Empty states
-
-Each tab gets its own message, such as `No failed messages` or `Outbox is empty`.
-
----
-
-## 12. Message Detail / Relay-Hop Information
-
-### Purpose
-Provide technical evidence for delivery decisions without overwhelming the responder.
-
-### Components
-
-- Event/message ID and packet type
-- Current delivery status
-- Attempt timeline with timestamps
-- Hop table: sequence, node ID, received time, forwarded time, RSSI/link quality when available
-- Route confidence and expiry
-- Raw diagnostic details behind an expandable section
-
-### Buttons/actions
-
-- `Retry`
-- `Copy event ID`
-- `Open node`
-- `Report delivery issue`
-
-### Important information
-
-Use a compact timeline first; the hop table is secondary. Show missing hop information as `Not reported`, never as zero.
-
-### Emergency states
-
-Critical packets use a pinned severity header and retain retry priority.
-
-### Failure states
-
-No route, TTL expired, duplicate packet, invalid signature, and queue rejection each need a distinct reason label and next action where possible.
-
-### Empty states
-
-- No hops reported: `This message has not reached another node.`
-- No diagnostics: hide the diagnostics section rather than showing an empty panel.
+✓ DELIVERED
 
 ---
 
-## 13. Network Screen
+# 7. MESSAGE STATUS SYSTEM
 
-### Purpose
-Show the current node's health, nearby peers, route quality, and mesh availability.
+Messages must have clear states.
 
-### Components
+## States
 
-- Local node status header: ID, role, online/offline, battery, power mode, last beacon
-- Network summary: nearby nodes, reachable nodes, gateway availability, route freshness
-- Nearby nodes list: node ID, role, distance/signal if available, last seen, relay capability, battery share if permitted
-- `Topology` entry point
-- Scan/refresh action
-- Connection failure summary
+QUEUED
 
-### Buttons/actions
+Message stored locally and waiting for a relay.
 
-- `Scan now`
-- Tap node: open node detail
-- `Open topology`
-- `Retry connection`
-- `Power settings`
+BROADCASTING
 
-### Important information
+Message is being transmitted to nearby nodes.
 
-Separate `heard nearby` from `reachable for delivery`. A node can be visible but not a viable route.
+RELAYING
 
-### Emergency states
+Message is travelling through one or more relay nodes.
 
-If the local node is the only reachable node, show `Isolated mesh` and relay responsibility. Keep SOS creation available.
+DELIVERED
 
-### Failure states
+Message reached its destination.
 
-- Radio unavailable: identify permission/hardware state and offer settings.
-- Scan timeout: retain previous nodes with ages.
-- Gateway unavailable: show mesh-local operation separately from internet/gateway state.
+ACKNOWLEDGED
 
-### Empty states
+Responder received and acknowledged the message.
 
-- No nearby nodes: show scan result, last scan time, and offline capability.
-- No route: `No delivery path currently known`.
+INTERRUPTED
 
----
+Transmission stopped because the current route failed.
 
-## 14. Current Node Status Screen
+EXPIRED
 
-### Purpose
-Give a precise health readout for the device acting as a mesh node.
+Message could not be delivered within the configured lifetime.
 
-### Components
+## Visual representation
 
-- Node ID and QR/share identifier where policy permits
-- Role and relay mode
-- Radio state and permissions
-- Battery percentage, charging state, estimated runtime, power saver state
-- Storage and queue capacity
-- Last beacon and last successful relay
-- Clock/time-sync confidence
-- Diagnostics list
+Use:
 
-### Buttons/actions
+Icon + text + supporting information.
 
-- `Copy node ID`
-- `Toggle relay mode` where authorized
-- `Run diagnostics`
-- `Power settings`
-- `View logs` for authorized technical users
-
-### Important information
-
-Battery `Unknown` is different from 0%. Show whether background restrictions may prevent relaying.
-
-### Emergency states
-
-Low battery may suggest power saving but must not silently stop active SOS handling. Active critical relay work gets a visible priority warning.
-
-### Failure states
-
-Sensor or radio readings unavailable: show the failed subsystem and last known time. Do not present stale battery/network readings as current.
-
-### Empty states
-
-- No diagnostics run: show `Diagnostics not run` with `Run diagnostics`.
-- No relay history: show `No relay activity recorded`.
+Do not depend on color alone.
 
 ---
 
-## 15. Node Detail Screen
+# 8. MESSAGES SCREEN
 
-### Purpose
-Help responders evaluate whether a nearby node is trustworthy and useful as a relay.
+The Messages screen is mandatory.
 
-### Components
+Example:
 
-- Node ID, role, last seen, freshness
-- Reachability and route quality
-- Signal/link history when available
-- Relay capability and queue hints
-- Recent interactions and failed attempts
-- Approximate location only when privacy policy allows
+MESSAGES
 
-### Buttons/actions
+FILTER:
+All | SOS | Incoming | Outgoing
 
-- `Route test` for authorized users
-- `Use as relay` only if protocol supports explicit selection
-- `Report node issue`
-- `Open topology`
+🔴 SOS #A104
+Delivered • 12 sec
+3 hops
 
-### Important information
+🟠 Assistance #A102
+Relaying • 2 hops
 
-Distinguish observed facts from estimates: `Last seen 12s ago` versus `Estimated 2 hops away`.
+⚠ Status #A099
+Delivery interrupted
 
-### Emergency states
+Each card should show:
 
-A node carrying a critical route is marked `Critical path` with reason and freshness.
+- Severity
+- Message type
+- ID
+- Status
+- Time
+- Hop count
+- Direction
+- Delivery state
 
-### Failure states
-
-Stale node: show last seen age and disable route test if too old. Untrusted/invalid node: explain why it is excluded from routing.
-
-### Empty states
-
-- No signal history: `No link history available`.
-- No recent messages: `No recent interactions`.
+Support search/filtering if technically reasonable.
 
 ---
 
-## 16. Topology Screen
+# 9. MESSAGE DETAILS
 
-### Purpose
-Make mesh structure and route fragility understandable at a glance.
+Show:
 
-### Topology visualization concept
+MESSAGE #A104
 
-Use an interactive 2D graph with the local node centered or highlighted. Nodes are circles with text labels; links are lines. Avoid geographic assumptions unless coordinates are known.
+Type:
+Emergency SOS
 
-- Local node: thick outline and `This device` label
-- Reachable route: solid line
-- Degraded/uncertain route: dashed line
-- Failed or expired route: muted line with failure label on selection
-- Critical SOS path: thicker critical-colored line plus `SOS route` label
-- Node fill encodes role, while status icon/text encodes health
-- Tap a node or edge to show details in a bottom sheet
-- Pinch zoom, pan, reset view, and list fallback are required
-- Maximum visible graph should be bounded; cluster or list overflow nodes
-- Provide an accessible linear alternative: ordered node and edge list
+Severity:
+CRITICAL
 
-### Buttons/actions
+Origin:
+N-104
 
-- `Reset view`
-- `List view`
-- `Refresh topology`
-- `Show critical routes`
-- Tap node/edge for details
+Destination:
+Responder Network
 
-### Important information
+Created:
+14:32:05
 
-Show topology freshness prominently. A graph from 10 minutes ago must not look live. Include legend and route confidence.
+Delivered:
+14:32:17
 
-### Emergency states
+Total hops:
+3
 
-Critical routes are visually prominent but do not obscure other nodes. A broken critical path must trigger a clear textual banner: `Critical SOS route interrupted`.
+ROUTE
 
-### Failure states
+N-104
+ ↓
+N-207
+ ↓
+N-312
+ ↓
+N-415
+ ↓
+RESPONDER
 
-No topology data: use the list fallback with `No topology snapshot available`. Partial graph: render known nodes and label missing links as unknown.
+STATUS
 
-### Empty states
-
-`No neighboring nodes have been observed` with local node status and scan action.
-
----
-
-## 17. Settings and Power Screen
-
-### Purpose
-Control operational permissions and expose constraints that affect mesh behavior.
-
-### Components
-
-- Node identity and role
-- Relay mode toggle
-- Radio/permission status
-- Notification and critical-alert override status
-- Battery optimization status
-- Storage/queue policy
-- Data retention and privacy controls
-- Diagnostics and app version
-
-### Buttons/actions
-
-- `Open system settings`
-- `Run diagnostics`
-- `Export diagnostics` where authorized
-- `Reset local data` with strong confirmation
-
-### Important information
-
-Explain consequences beside settings: disabling relay mode affects nearby users. Use toggles for binary settings and dialogs for destructive actions.
-
-### Emergency states
-
-Critical alert override status must be visible. System restrictions must be described as restrictions, not silently worked around.
-
-### Failure states
-
-If a setting cannot be changed, show the owning system restriction and a direct settings action.
-
-### Empty states
-
-No diagnostics history: offer `Run diagnostics`.
+✓ DELIVERED
 
 ---
 
-## 18. Compose Implementation Notes
+# 10. MESH NETWORK SCREEN
 
-Represent screen data with immutable UI models and explicit state enums. Suggested shared states:
+The Network screen should act as the network operations center.
 
-```kotlin
-sealed interface ConnectivityState {
-    data object Online : ConnectivityState
-    data object MeshOnly : ConnectivityState
-    data object Offline : ConnectivityState
-    data class Stale(val lastConfirmedAt: Instant) : ConnectivityState
-    data class Failed(val message: String) : ConnectivityState
-}
+Show:
 
-enum class DeliveryState {
-    LocalOnly, Queued, Relaying, NextNodeDelivered,
-    Delivered, Acknowledged, Retrying, NoRoute, Expired, Uncertain
-}
+MESH STATUS
 
-enum class Severity { Critical, High, Moderate, Low }
-```
+● OPERATIONAL
 
-Implementation requirements:
+Nodes:
+12
 
-- Use `Scaffold` with a top app bar and snackbar host; critical state belongs in persistent content, not snackbar-only messaging.
-- Keep event IDs stable and make list rows key by event/message/node ID.
-- Hoist filter, sort, and selection state to the route-level ViewModel.
-- Persist drafts and locally queued SOS packets before attempting transport.
-- Use `contentDescription` and semantic labels for severity, delivery status, graph nodes, and all icon buttons.
-- Support large font sizes, dark theme, high contrast, TalkBack, and reduced motion.
-- Use a list fallback for topology and a text alternative for every graph-only fact.
-- Treat stale timestamps as first-class data in every repository response.
-- Keep retry idempotent by event ID; never create a second SOS because a transport request timed out.
+Active Links:
+18
 
----
+Relay Nodes:
+7
 
-## 19. Cross-Screen Failure Language
+Reachable:
+GOOD
 
-Use consistent wording:
+Connectivity:
 
-- `Saved locally` means local persistence succeeded.
-- `Queued for relay` means a transport attempt has not completed.
-- `Delivered to next node` means one hop confirmed, not final delivery.
-- `Delivered` means the protocol's final delivery condition was confirmed.
-- `Acknowledged` means a responder or receiving node explicitly acknowledged it.
-- `Delivery uncertain` means the outcome cannot be proven.
-- `No route currently known` is not the same as `Failed`.
-- `Stale` always includes the last confirmed time.
+Bluetooth     ● Active
+Wi-Fi Direct  ● Active
+Internet      ○ Unavailable
 
-Avoid `Success`, `Connected`, or `Synced` without a subject and timestamp.
+Available Routes:
+3
+
+Network Stability:
+GOOD
 
 ---
 
-## 20. Validation Checklist
+# 11. NETWORK HEALTH SCORE
 
-Before release, verify:
+Provide a simple human-readable network health indicator.
 
-- A user can create and locally save an SOS with no network.
-- Duplicate sends cannot create duplicate event IDs.
-- Every critical alert is visible from every primary destination.
-- Offline, mesh-only, stale, no-route, and battery-low states are testable in previews.
-- A responder can acknowledge, assign, relay, and resolve an alert with explicit status feedback.
-- Hop information distinguishes observed, missing, and estimated data.
-- Topology has zoom/pan, freshness, critical-route emphasis, and an accessible list fallback.
-- All empty states provide a useful next action or a clear explanation.
-- Dark theme, large text, TalkBack labels, and color-blind interpretation preserve severity and delivery meaning.
+Example:
 
----
+NETWORK HEALTH
 
-## 21. Technical Limitation Refinement Protocol
+████████░░ 82%
 
-When implementation constraints arrive, preserve the user-facing guarantees in this order:
+GOOD
 
-1. SOS local persistence and idempotency
-2. Clear severity and lifecycle status
-3. Offline and stale-state honesty
-4. Responder acknowledgement and audit trail
-5. Nearby-node and route visibility
-6. Topology animation and secondary diagnostics
+Avoid making this look like fake scientific accuracy.
 
-If a platform or protocol limitation prevents a feature, replace it with an explicit state and a next action. For example, if live topology is unavailable, show the last snapshot age and a list of confirmed nodes; do not render a static graph that appears live.
+Use descriptive categories:
+
+EXCELLENT
+GOOD
+DEGRADED
+CRITICAL
+ISOLATED
+
+If a numeric score is used, clearly treat it as a UI summary rather than a precise real-world metric unless the backend provides one.
 
 ---
 
-## 22. Screen State Matrix
+# 12. NEARBY NODES
 
-Every route should support these states through previews and automated UI tests. Loading must never replace already-known operational data.
+Display nearby devices.
 
-| Route | Normal | Offline/degraded | Failure | Empty | Critical override |
-|---|---|---|---|---|---|
-| Dashboard | Live summary | Cached summary with age | Affected summary row has retry | No alerts/messages/nodes | Pinned critical strip |
-| Create SOS | Editable form | Local-only delivery preview | Field or storage error | Missing location block | Critical confirmation |
-| Active SOS | Timeline and route | Queued/no-route status | Retry with reason | No hop/acknowledgement yet | Persistent critical status |
-| Alerts | Prioritized queue | Cached queue with last sync | Sync retry | Filter-specific empty result | Critical rows pinned |
-| Alert detail | Responder actions | Actions queued locally | Action-specific failure | Missing description/location | Acknowledge dominant |
-| Messages | Queue and statuses | Mesh-only status | Retry or expiry reason | Empty tab | Critical packets pinned |
-| Network | Nodes and routes | Last-seen ages | Radio/scan error | No nearby nodes | Isolated mesh warning |
-| Topology | Fresh graph | Stale graph with timestamp | Partial/list fallback | No snapshot | Critical path emphasis |
+Example:
 
-### Shared state presentation
+N-207
+RELAY
+8m
+Signal: Strong
+Battery: 84%
+Last seen: 3 sec
 
-- **Loading:** skeleton only for content with no cached value; otherwise show cached content and a small refresh indicator.
-- **Offline:** a persistent, dismissible banner may be dismissed visually, but the state remains in the screen model.
-- **Stale:** show the age next to the affected value, not only in a global banner.
-- **Failure:** state what failed and provide the narrowest relevant action, such as `Retry scan` rather than a generic `Retry`.
-- **Empty:** explain whether there is no data, no matching data, or no route, then provide one useful next action.
+N-312
+RESPONDER
+17m
+Signal: Medium
+Battery: 63%
+Last seen: 5 sec
 
----
+N-415
+DEVICE
+25m
+Signal: Weak
+Battery: 31%
+Last seen: 8 sec
 
-## 23. Compose Component Map
+Node roles:
 
-Build shared primitives before assembling screens. Components should accept semantic state, not infer emergency meaning from arbitrary colors.
-
-| Component | Responsibility | Required inputs |
-|---|---|---|
-| `ConnectivityBanner` | Offline, mesh-only, stale, and failure messaging | state, lastConfirmedAt, action |
-| `SeverityBadge` | Severity icon, label, and accessible description | severity |
-| `DeliveryStatusChip` | Human-readable packet state | deliveryState, timestamp |
-| `AlertListItem` | Fast scanning of an SOS event | alert summary, action callbacks |
-| `NodeStatusRow` | Nearby/local node health | node summary, freshness |
-| `OperationalMetric` | Label/value/age presentation | label, value, status, updatedAt |
-| `EventTimeline` | Lifecycle and responder audit history | events, currentState |
-| `SosActionButton` | Consistent high-priority SOS entry point | activeSos, enabled, onClick |
-| `RetryAction` | Narrow retry affordance with progress state | operation, isRetrying, onRetry |
-| `TopologyCanvas` | Graph rendering and touch interaction | nodes, edges, selectedItem |
-| `TopologyListFallback` | Accessible graph alternative | nodes, edges, routeState |
-
-### Component rules
-
-- `SeverityBadge` always renders text and an icon; do not expose color alone.
-- `DeliveryStatusChip` must distinguish `NextNodeDelivered` from `Delivered`.
-- `AlertListItem` owns no navigation decision; expose callbacks for acknowledge, assign, and open.
-- `SosActionButton` is the only primary dashboard action with emergency styling.
-- All reusable components need previews for normal, offline, stale, failure, empty, and critical states.
+USER
+RELAY
+RESPONDER
+DEVICE
+UNKNOWN
 
 ---
 
-## 24. Interaction Priority Model
+# 13. NODE DETAILS
 
-When several actions compete for attention, use this order:
+When tapping a node:
 
-1. Protect life: create SOS, acknowledge critical SOS, or restore a critical route.
-2. Preserve truth: expose uncertainty, stale data, or a failed delivery attempt.
-3. Maintain continuity: retry, relay, or queue work locally.
-4. Coordinate response: assign, update, and resolve alerts.
-5. Diagnose: inspect hops, topology, logs, and power details.
+NODE N-207
 
-This order applies to layout, focus, notification priority, and keyboard/accessibility traversal. A diagnostic control must never displace an unacknowledged critical alert.
+Role:
+RELAY
 
-### Destructive and irreversible actions
+Battery:
+84%
 
-- `Cancel SOS` requires a confirmation dialog that repeats the event ID and current delivery state.
-- `Clear delivered` never clears unresolved or unacknowledged critical events.
-- `Reset local data` requires explicit confirmation and explains that queued offline messages may be lost.
-- `Mark resolved` asks for a resolution note when the responder role permits it and retains the audit event.
+Signal:
+Strong
+
+Distance:
+8m
+
+Last Seen:
+3 sec ago
+
+Active Routes:
+2
+
+Messages Relayed:
+17
+
+Connection:
+ACTIVE
+
+Actions:
+
+[ VIEW ROUTE ]
+
+[ VIEW TOPOLOGY ]
 
 ---
 
-## 25. Notification and Background Behavior
+# 14. MESH TOPOLOGY
 
-- New critical SOS: high-priority notification with severity, event ID, and `Open alert` action.
-- New high/moderate SOS: standard notification grouped by incident.
-- Delivery failure: notify only when a user action can help or when a critical event becomes uncertain.
-- Repeated relay attempts must update one notification rather than create a notification storm.
-- Notification text must not claim final delivery when only local queuing succeeded.
-- Tapping a notification opens the alert detail and preserves the global critical strip until acknowledgement.
+This is a mandatory showcase feature.
 
-If background execution is restricted, show the restriction in Current Node Status and Settings. The UI must state when relay behavior is limited by the operating system.
+Do NOT replace it with a list.
+
+Use a graphical network visualization.
+
+Concept:
+
+                  N312
+                   ●
+                  / \
+                 /   \
+        N207 ●         ● N415
+             \         /
+              \       /
+               ●─────●
+             USER   RESPONDER
+
+The actual UI must use graphical nodes and connection lines.
+
+## Node appearance
+
+USER:
+Large highlighted node
+
+RELAY:
+Normal node with relay indicator
+
+RESPONDER:
+Distinct responder icon
+
+UNKNOWN:
+Neutral node
+
+## Connection lines
+
+Normal:
+Standard connection
+
+Weak:
+Dashed/thinner line
+
+Active:
+Highlighted connection
+
+Failed:
+Broken/dashed connection
+
+## Active SOS route
+
+USER → N207 → N312 → RESPONDER
+
+The active route must be visually emphasized.
 
 ---
 
-## 26. Design Review Questions for Technical Refinement
+# 15. TOPOLOGY INTERACTION
 
-When the lead developer supplies constraints, resolve these questions explicitly:
+Support:
 
-- What protocol event proves `Delivered` versus `NextNodeDelivered`?
-- Can the local database commit before radio transmission begins?
-- What is the maximum packet size and attachment policy offline?
-- How long is a node considered fresh, stale, or expired?
-- Which roles can acknowledge, assign, relay, resolve, or inspect diagnostics?
-- Which location data is safe to expose to nearby nodes and responders?
-- What happens to critical packets when the queue is full?
-- Which system permissions or background limits can interrupt relaying?
+- Zoom
+- Pan
+- Node selection
+- Route highlighting
+- Node details
+- Active route
+- Failed route
+- Relay path
+- Hop count
 
-Record each answer in the state model and update the affected screen rows, actions, and failure copy together.
+If full zoom/pan is technically too complex initially, implement a clean scalable topology layout first and preserve the architecture for future interaction.
+
+---
+
+# 16. LIVE ROUTE VISUALIZATION
+
+When SOS is active:
+
+USER
+ ↓
+N207
+ ↓
+N312
+ ↓
+RESPONDER
+
+Show subtle packet movement.
+
+The animation must communicate:
+
+"Message is travelling through the mesh."
+
+Do not use decorative animations unrelated to networking.
+
+---
+
+# 17. ROUTE INFORMATION
+
+Show:
+
+ACTIVE ROUTE
+
+N104 → N207 → N312 → N415
+
+Hops:
+3
+
+Route status:
+ACTIVE
+
+Estimated transmission:
+12 sec
+
+Last relay:
+N312
+
+If route fails:
+
+ROUTE INTERRUPTED
+
+Last successful relay:
+N312
+
+Searching for alternative route...
+
+---
+
+# 18. ROUTE RECOVERY
+
+Support a visible recovery state.
+
+Example:
+
+CONNECTION LOST
+
+N312 unavailable
+
+Searching for alternate relay...
+
+Then:
+
+ALTERNATE ROUTE FOUND
+
+N104
+ ↓
+N207
+ ↓
+N415
+ ↓
+RESPONDER
+
+Transmission resumed.
+
+This is a major demonstration feature.
+
+---
+
+# 19. OFFLINE MODE
+
+Offline mode is a first-class application state.
+
+Show:
+
+OFFLINE
+
+Internet unavailable.
+
+Mesh:
+● Operational
+
+or:
+
+OFFLINE
+
+Internet unavailable.
+
+Mesh:
+▲ Degraded
+
+or:
+
+OFFLINE
+
+No relay path available.
+
+SOS messages should remain queued if possible.
+
+Example:
+
+SOS QUEUED
+
+No relay currently available.
+
+Your emergency message is stored locally
+and will be transmitted when a relay becomes available.
+
+[ VIEW QUEUE ]
+
+---
+
+# 20. LOCAL MESSAGE QUEUE
+
+Provide a queue indicator.
+
+Example:
+
+QUEUED MESSAGES
+3
+
+Messages waiting for relay transmission.
+
+Show:
+
+- Message ID
+- Severity
+- Age
+- Retry state
+- Current queue position
+
+Example:
+
+🔴 SOS #A104
+Waiting for relay
+12 sec
+
+🟠 Assistance #A103
+Waiting for relay
+24 sec
+
+---
+
+# 21. CONNECTION DIAGNOSTICS
+
+Show understandable diagnostics.
+
+Example:
+
+CONNECTION DIAGNOSTICS
+
+Bluetooth
+✓ Available
+
+Wi-Fi Direct
+✓ Available
+
+Nearby Nodes
+0
+
+Relay Paths
+0
+
+Internet
+✕ Unavailable
+
+Mesh State
+ISOLATED
+
+Recommendation:
+
+Move closer to another mesh node
+to establish communication.
+
+---
+
+# 22. BATTERY AWARENESS
+
+Always display battery state where useful.
+
+Normal:
+
+🔋 78%
+
+Low:
+
+🔋 21%
+LOW BATTERY
+
+Critical:
+
+🔋 8%
+CRITICAL BATTERY
+
+Battery information should appear in:
+
+- Dashboard
+- Node details
+- Nearby node cards
+- Topology node details
+- Responder information when relevant
+
+Avoid overwhelming the primary UI.
+
+---
+
+# 23. POWER-SAVING MODE
+
+If appropriate for the project architecture, provide:
+
+POWER SAVING
+
+Reduce scanning frequency
+to preserve battery.
+
+Options:
+
+NORMAL
+BALANCED
+POWER SAVING
+
+This should be clearly explained.
+
+Do not implement real power management unless the backend/device layer supports it.
+
+---
+
+# 24. RESPONDER MODE
+
+Responder Mode is mandatory.
+
+Layout:
+
+RESPONDER MODE
+
+🔴 3 CRITICAL
+🟠 5 HIGH
+🟡 7 MODERATE
+
+ACTIVE INCIDENTS
+
+🔴 A104
+3 hops • 8 sec
+
+🔴 A102
+4 hops • 12 sec
+
+🟠 A098
+2 hops • 35 sec
+
+[ NETWORK TOPOLOGY ]
+
+## Responder features
+
+- Incident list
+- Severity sorting
+- Latest incidents
+- Acknowledge
+- Responding state
+- Location
+- Relay path
+- Network topology
+- Response messaging
+- Incident status
+
+---
+
+# 25. INCIDENT PRIORITIZATION
+
+Sort incidents using:
+
+1. Severity
+2. Recency
+3. Delivery status
+4. Distance if available
+5. Responder assignment
+
+Critical emergencies should appear first.
+
+---
+
+# 26. INCIDENT DETAIL
+
+Example:
+
+CRITICAL INCIDENT
+
+SOS #A104
+
+Medical Emergency
+
+LOCATION
+
+● Available
+
+Origin:
+N104
+
+Distance:
+1.2 km
+
+RELAY PATH
+
+N104
+ ↓
+N207
+ ↓
+N312
+ ↓
+RESPONDER
+
+STATUS
+
+✓ DELIVERED
+
+ACTIONS:
+
+[ ACKNOWLEDGE ]
+
+[ RESPONDING ]
+
+[ SEND MESSAGE ]
+
+[ VIEW TOPOLOGY ]
+
+---
+
+# 27. RESPONDER ACKNOWLEDGEMENT
+
+After acknowledgement:
+
+INCIDENT ACKNOWLEDGED
+
+Responder:
+R-001
+
+Time:
+14:35:12
+
+Status:
+
+ACKNOWLEDGED
+
+Then:
+
+RESPONDING
+
+Then:
+
+RESOLVED
+
+Incident lifecycle:
+
+RECEIVED
+ ↓
+ACKNOWLEDGED
+ ↓
+RESPONDING
+ ↓
+RESOLVED
+
+---
+
+# 28. RESPONSE MESSAGES
+
+Responder should be able to send:
+
+- Help is on the way
+- Stay where you are
+- Move to safe location
+- Provide additional information
+- Unable to reach location
+- Custom message
+
+Example:
+
+RESPONDER MESSAGE
+
+[ Help is on the way ]
+
+[ Stay where you are ]
+
+[ Move to safe location ]
+
+[ CUSTOM MESSAGE ]
+
+Messages should travel through the same mesh communication mechanism conceptually.
+
+---
+
+# 29. RECEIVED ALERTS
+
+Users should be able to see relevant emergency alerts.
+
+Example:
+
+EMERGENCY ALERT
+
+🔴 CRITICAL
+
+SOS #A104
+
+Medical Emergency
+
+3 hops
+
+Delivered 12 sec ago
+
+Location available
+
+[ VIEW INCIDENT ]
+
+---
+
+# 30. LOCATION STATUS
+
+Location should have clear states.
+
+Available:
+
+● LOCATION AVAILABLE
+
+Unavailable:
+
+⚠ LOCATION UNAVAILABLE
+
+Searching:
+
+◉ ACQUIRING LOCATION
+
+Low accuracy:
+
+⚠ LOW LOCATION ACCURACY
+
+Do not show fake GPS data in production.
+
+For demo mode, clearly label simulated locations.
+
+---
+
+# 31. MAP / LOCATION VIEW
+
+If location functionality is implemented, provide a simple incident location view.
+
+Show:
+
+- User location
+- Incident location
+- Responder location when available
+- Approximate distance
+- Location accuracy
+
+Do not make the map the primary screen.
+
+Emergency information must remain more important.
+
+---
+
+# 32. EMERGENCY NOTIFICATION BANNER
+
+When a critical emergency arrives, show a prominent alert banner.
+
+Example:
+
+🔴 CRITICAL EMERGENCY
+
+SOS #A104
+
+Immediate response required.
+
+[ VIEW ]
+
+Do not allow the notification to permanently cover the application.
+
+---
+
+# 33. NETWORK EVENT LOG
+
+Provide an optional technical event log.
+
+Example:
+
+14:32:05
+SOS created
+
+14:32:06
+Broadcast started
+
+14:32:07
+Relay N207 discovered
+
+14:32:09
+Relay N312 discovered
+
+14:32:12
+Responder reached
+
+14:32:17
+SOS delivered
+
+This is especially useful for:
+
+- Developers
+- Judges
+- Demonstrations
+- Debugging
+
+Keep it secondary to normal emergency UI.
+
+---
+
+# 34. SYSTEM EVENT LOG
+
+Possible events:
+
+NODE_DISCOVERED
+NODE_LOST
+RELAY_FOUND
+RELAY_LOST
+MESSAGE_QUEUED
+MESSAGE_BROADCAST
+MESSAGE_RELAYED
+MESSAGE_DELIVERED
+MESSAGE_INTERRUPTED
+ROUTE_FOUND
+ROUTE_LOST
+ROUTE_RECOVERED
+BATTERY_LOW
+MESH_DEGRADED
+MESH_RECOVERED
+
+Human-readable UI text should be shown instead of raw event names.
+
+---
+
+# 35. NETWORK RECOVERY INDICATOR
+
+When network recovers:
+
+MESH RECOVERED
+
+✓ Relay path available
+
+3 routes discovered
+
+Queued messages:
+2
+
+[ VIEW QUEUE ]
+
+This makes recovery visible to the user.
+
+---
+
+# 36. SEARCH / FILTER
+
+Where technically useful, support:
+
+Message search
+
+Incident filtering:
+
+All
+Critical
+High
+Moderate
+Acknowledged
+Unresolved
+Delivered
+Interrupted
+
+Node filtering:
+
+All
+Relay
+Responder
+Device
+
+Do not add filters where they make the interface unnecessarily complicated.
+
+---
+
+# 37. SORTING
+
+Responder incidents:
+
+Critical first
+Newest first
+
+Messages:
+
+Newest first
+
+Nodes:
+
+Strongest signal first
+
+Topology:
+
+No sorting required
+
+---
+
+# 38. SETTINGS
+
+Provide a simple settings screen.
+
+Possible sections:
+
+DEVICE
+
+Node ID
+Node Role
+Battery
+
+NETWORK
+
+Bluetooth
+Wi-Fi Direct
+Discovery
+Scanning frequency
+
+EMERGENCY
+
+Default severity
+Location behavior
+SOS confirmation
+
+NOTIFICATIONS
+
+Emergency alerts
+Responder notifications
+Delivery notifications
+
+DEVELOPER / DEMO
+
+Demo mode
+Mock data
+Network simulation
+
+Do not expose developer controls in the normal user experience unless useful for the hackathon.
+
+---
+
+# 39. DEMO MODE
+
+Create a demo mode if the real backend is unavailable.
+
+Demo mode should allow judges to see:
+
+1. Normal network
+2. Nearby nodes
+3. Topology
+4. SOS creation
+5. Relay path
+6. Responder reception
+7. Delivery
+8. Failure
+9. Recovery
+10. Offline queue
+
+Example demo scenario:
+
+USER:
+N104
+
+RELAYS:
+N207
+N312
+
+RESPONDER:
+R001
+
+SOS:
+A104
+
+Flow:
+
+N104
+ ↓
+N207
+ ↓
+N312
+ ↓
+R001
+
+Then:
+
+DELIVERED
+
+3 HOPS
+
+12 SEC
+
+---
+
+# 40. FAILURE SIMULATION
+
+If demo mode is available, allow:
+
+[ SIMULATE CONNECTION FAILURE ]
+
+Then show:
+
+⚠ ROUTE INTERRUPTED
+
+N312 disconnected.
+
+Searching for alternate relay...
+
+Then:
+
+ALTERNATE ROUTE FOUND
+
+N104
+ ↓
+N207
+ ↓
+N415
+ ↓
+R001
+
+✓ TRANSMISSION RESUMED
+
+This is highly valuable for the hackathon demonstration.
+
+---
+
+# 41. EMPTY STATES
+
+Every major list needs an appropriate empty state.
+
+No emergencies:
+
+✓ NO ACTIVE EMERGENCIES
+
+No nearby nodes:
+
+NO NEARBY NODES
+
+Scanning for nearby devices...
+
+No messages:
+
+NO MESSAGES
+
+Messages sent through the mesh
+will appear here.
+
+No routes:
+
+NO RELAY PATH AVAILABLE
+
+No queued messages:
+
+✓ QUEUE EMPTY
+
+Do not use generic:
+
+"No data found."
+
+---
+
+# 42. LOADING STATES
+
+Use meaningful loading messages.
+
+Node discovery:
+
+SCANNING FOR NODES...
+
+Network:
+
+ANALYZING MESH...
+
+Location:
+
+ACQUIRING LOCATION...
+
+Route:
+
+FINDING RELAY PATH...
+
+SOS:
+
+BROADCASTING SOS...
+
+Do not display a generic spinner without context.
+
+---
+
+# 43. ERROR STATES
+
+Errors must explain:
+
+What happened
+What it means
+What the system is doing
+What the user can do
+
+Example:
+
+RELAY CONNECTION LOST
+
+The current route is unavailable.
+
+Searching for another relay path...
+
+Last successful relay:
+N312
+
+---
+
+# 44. COLOR SYSTEM
+
+Use restrained professional colors.
+
+Critical:
+Red
+
+High:
+Orange
+
+Moderate:
+Amber/Yellow
+
+Operational:
+Green
+
+Information:
+Blue
+
+Offline:
+Neutral Gray
+
+Background:
+Dark Neutral
+
+Primary Text:
+White
+
+Secondary Text:
+Light Gray
+
+Use colors consistently.
+
+Never use color as the only state indicator.
+
+---
+
+# 45. TYPOGRAPHY
+
+Use Roboto / Material 3 typography.
+
+Suggested:
+
+Emergency display:
+32–40sp
+
+Screen title:
+24sp
+
+Section heading:
+18–20sp
+
+Primary information:
+16sp
+
+Secondary:
+14sp
+
+Metadata:
+12sp
+
+Emergency numbers can be larger.
+
+---
+
+# 46. MATERIAL 3
+
+Use Material 3 where appropriate.
+
+Use:
+
+- Cards
+- Buttons
+- Navigation bar
+- Dialogs
+- Chips
+- Lists
+- Icons
+- Top app bars
+
+But do not make the UI look like a generic Material template.
+
+Customize:
+
+- Spacing
+- Colors
+- Emergency components
+- Network visualization
+- Status cards
+- SOS interaction
+
+---
+
+# 47. SOS BUTTON
+
+The SOS button must be visually dominant.
+
+Example:
+
+[ SEND SOS ]
+
+Requirements:
+
+- Large touch target
+- Clear text
+- High contrast
+- Easy to locate
+- Easy to understand
+- Not hidden in menus
+
+Do not make the SOS button a tiny icon.
+
+---
+
+# 48. ACCESSIBILITY
+
+The application must support emergency use under stress.
+
+Requirements:
+
+- High contrast
+- Large touch targets
+- Clear labels
+- Icons + text
+- Color + text
+- Readable typography
+- No tiny status indicators
+- Avoid information overload
+- Consistent component placement
+
+The interface must remain understandable even if the user does not understand networking technology.
+
+---
+
+# 49. THREE LEVEL INFORMATION MODEL
+
+Every important state should have three levels.
+
+LEVEL 1 — SIMPLE
+
+🔴 SOS DELIVERED
+
+LEVEL 2 — OPERATIONAL
+
+Delivered through 3 relay hops.
+
+LEVEL 3 — TECHNICAL
+
+N104 → N207 → N312 → N415
+
+RSSI
+Battery
+Timestamp
+Route metrics
+
+Normal users see Level 1.
+
+Responders can access Level 2.
+
+Technical details can be accessed through deeper screens.
+
+---
+
+# 50. EMERGENCY ALERT HIERARCHY
+
+Critical:
+
+🔴 CRITICAL
+
+High:
+
+🟠 HIGH
+
+Moderate:
+
+🟡 MODERATE
+
+Information:
+
+🔵 INFORMATION
+
+Never visually compete with Critical emergencies.
+
+---
+
+# 51. ANIMATION
+
+Use animation only when it improves understanding.
+
+Useful animations:
+
+- Node discovery
+- Active relay
+- Packet movement
+- Route recovery
+- Status transition
+- Network recovery
+
+Avoid:
+
+- Excessive bouncing
+- Large transitions
+- Decorative particles
+- Gaming effects
+- Long animations
+
+Emergency actions must be immediate.
+
+---
+
+# 52. COMPONENT ARCHITECTURE
+
+Create reusable Compose components.
+
+Required components:
+
+EmergencyStatusCard
+EmergencySeverityChip
+SOSButton
+SOSConfirmationCard
+SOSStatusTimeline
+NodeStatusCard
+NearbyNodeCard
+NetworkStatusCard
+NetworkHealthCard
+TopologyView
+TopologyNode
+TopologyConnection
+ActiveRoute
+RelayPath
+MessageCard
+MessageStatusIndicator
+MessageTimeline
+IncidentCard
+IncidentPriorityCard
+ResponderDashboard
+ResponderIncidentCard
+BatteryIndicator
+SignalIndicator
+ConnectionIndicator
+OfflineBanner
+FailureState
+EmptyState
+LoadingState
+RecoveryState
+EventLog
+LocationStatusCard
+ResponseActionBar
+
+Avoid duplicated UI code.
+
+---
+
+# 53. DATA MODEL CONCEPT
+
+Node:
+
+nodeId
+role
+batteryLevel
+signalStrength
+distance
+lastSeen
+isRelay
+isResponder
+connectionState
+
+SOS:
+
+sosId
+severity
+type
+description
+originNode
+location
+locationAccuracy
+status
+createdAt
+deliveredAt
+hopCount
+relayPath
+
+MeshStatus:
+
+overallStatus
+nearbyNodeCount
+activeLinkCount
+relayCount
+availableRoutes
+bluetoothStatus
+wifiDirectStatus
+internetStatus
+lastSync
+
+Message:
+
+messageId
+type
+severity
+status
+origin
+destination
+hopCount
+relayPath
+timestamp
+
+Incident:
+
+incidentId
+severity
+type
+location
+originNode
+status
+createdAt
+acknowledgedAt
+responderId
+relayPath
+
+---
+
+# 54. UI STATE MODEL
+
+Every major screen should account for:
+
+LOADING
+NORMAL
+EMPTY
+OFFLINE
+DEGRADED
+CRITICAL
+ERROR
+RECOVERING
+
+Do not design only the happy path.
+
+---
+
+# 55. ARCHITECTURE
+
+Use clean separation:
+
+Mesh / Network Layer
+        ↓
+Repository
+        ↓
+ViewModel
+        ↓
+UI State
+        ↓
+Jetpack Compose
+
+Compose must not directly manage networking.
+
+Do not put networking code inside Composables.
+
+---
+
+# 56. PROJECT STRUCTURE
+
+Use a clean structure similar to:
+
+ui/
+    navigation/
+    theme/
+    components/
+    dashboard/
+    sos/
+    network/
+    messages/
+    responder/
+    settings/
+
+data/
+    models/
+    repository/
+    datasource/
+
+domain/
+    usecase/
+
+Do not over-engineer.
+
+Adapt this structure to the existing project.
+
+---
+
+# 57. MOCK DATA
+
+If the actual mesh backend is not implemented, create a clean demo/mock data layer.
+
+Use realistic example nodes:
+
+N104
+N207
+N312
+N415
+N512
+
+Responder:
+
+R001
+
+Example SOS:
+
+A104
+A102
+A098
+
+Make mock data clearly replaceable.
+
+Do not mix mock data directly throughout Composables.
+
+---
+
+# 58. REQUIRED DEMO WORKFLOW
+
+The application must demonstrate:
+
+STEP 1
+
+Dashboard
+
+MESH OPERATIONAL
+
+STEP 2
+
+Nearby Nodes
+
+N207
+N312
+N415
+
+STEP 3
+
+Topology
+
+USER
+ ↓
+N207
+ ↓
+N312
+ ↓
+RESPONDER
+
+STEP 4
+
+Create SOS
+
+🔴 CRITICAL
+
+STEP 5
+
+SOS STATUS
+
+CREATED
+ ↓
+BROADCAST
+ ↓
+RELAYING
+ ↓
+DELIVERED
+
+STEP 6
+
+Messages
+
+🔴 SOS #A104
+Delivered
+3 hops
+
+STEP 7
+
+Responder
+
+🔴 A104
+3 hops
+Delivered
+
+STEP 8
+
+Incident Detail
+
+[ ACKNOWLEDGE ]
+[ RESPONDING ]
+
+STEP 9
+
+Simulate failure
+
+ROUTE INTERRUPTED
+
+STEP 10
+
+Recovery
+
+ALTERNATE ROUTE FOUND
+
+STEP 11
+
+Delivery
+
+✓ SOS DELIVERED
+
+This workflow must feel like one coherent product.
+
+---
+
+# 59. HACKATHON PRESENTATION REQUIREMENT
+
+The UI should visually communicate the project's technical innovation.
+
+A judge should be able to understand within seconds:
+
+"This application does not depend entirely on the internet."
+
+The UI should demonstrate:
+
+Internet:
+✕ UNAVAILABLE
+
+Mesh:
+● OPERATIONAL
+
+Nearby Nodes:
+6
+
+Relay Paths:
+3
+
+SOS:
+✓ DELIVERED
+
+This is a very important visual message.
+
+---
+
+# 60. NETWORK INDEPENDENCE VISUAL
+
+When internet is unavailable but mesh works:
+
+INTERNET
+✕
+
+MESH
+✓ OPERATIONAL
+
+SOS
+✓ DELIVERED
+
+This should be clearly visible.
+
+This is one of the project's strongest differentiators.
+
+---
+
+# 61. PROFESSIONAL DESIGN LANGUAGE
+
+The final application should feel:
+
+Professional
+Serious
+Reliable
+Fast
+Technical
+Calm
+High-contrast
+Emergency-focused
+
+Avoid making every card highly rounded or brightly colored.
+
+Use visual hierarchy instead of decoration.
+
+---
+
+# 62. RESPONSIVE DESIGN
+
+The application should work across different Android screen sizes.
+
+Avoid hard-coded dimensions wherever possible.
+
+Use:
+
+- dp
+- sp
+- responsive layouts
+- LazyColumn
+- adaptive containers
+- proper Compose constraints
+
+The topology should adapt to different screen sizes.
+
+---
+
+# 63. PERFORMANCE
+
+Do not create unnecessary recompositions.
+
+Avoid expensive animations.
+
+Use LazyColumn/LazyRow for lists.
+
+Keep topology rendering efficient.
+
+Do not repeatedly recreate static objects unnecessarily.
+
+---
+
+# 64. ERROR HANDLING
+
+The application must never crash because demo/mock data is missing.
+
+Provide sensible fallback UI.
+
+Example:
+
+Unable to load network status.
+
+[ RETRY ]
+
+But for emergency communication failures, use meaningful language:
+
+NO RELAY PATH AVAILABLE
+
+rather than:
+
+NullPointerException
+Network error
+HTTP 500
+
+---
+
+# 65. SECURITY-STYLE VISUAL LANGUAGE
+
+The application may use subtle operational terminology:
+
+NODE
+RELAY
+ROUTE
+HOP
+MESH
+INCIDENT
+TRANSMISSION
+DELIVERY
+ACKNOWLEDGED
+RESPONDING
+
+Do not overload normal users with technical terms.
+
+Expose technical details progressively.
+
+---
+
+# 66. FINAL SCREEN INVENTORY
+
+The implementation should include at least:
+
+1. Dashboard
+2. SOS Creation
+3. SOS Confirmation
+4. SOS Transmission Status
+5. Network Status
+6. Nearby Nodes
+7. Node Details
+8. Mesh Topology
+9. Route Details
+10. Messages
+11. Message Details
+12. Received SOS Alerts
+13. Responder Dashboard
+14. Incident Details
+15. Response Message
+16. Connection Diagnostics
+17. Offline Mode
+18. Queued Messages
+19. Event Log
+20. Settings
+
+Not every screen must appear in bottom navigation.
+
+Use navigation appropriately.
+
+---
+
+# 67. MANDATORY FEATURES CHECKLIST
+
+Before declaring the implementation complete, verify:
+
+[ ] Dashboard
+[ ] Large SOS action
+[ ] SOS creation
+[ ] Emergency severity
+[ ] Emergency type
+[ ] Location state
+[ ] SOS confirmation
+[ ] SOS transmission status
+[ ] Queued state
+[ ] Broadcast state
+[ ] Relaying state
+[ ] Delivered state
+[ ] Interrupted state
+[ ] Relay path
+[ ] Hop count
+[ ] Network status
+[ ] Mesh health
+[ ] Nearby nodes
+[ ] Node details
+[ ] Graphical topology
+[ ] Active route visualization
+[ ] Messages screen
+[ ] Message details
+[ ] Received SOS alerts
+[ ] Responder Mode
+[ ] Active incident list
+[ ] Incident details
+[ ] Acknowledge action
+[ ] Responding state
+[ ] Response message
+[ ] Connection diagnostics
+[ ] Offline mode
+[ ] Local queue UI
+[ ] Battery awareness
+[ ] Location status
+[ ] Failure states
+[ ] Recovery states
+[ ] Empty states
+[ ] Loading states
+[ ] Event log
+[ ] Demo/mock mode
+[ ] Failure simulation
+[ ] Network recovery simulation
+[ ] Accessibility
+[ ] Responsive layout
+
+---
+
+# 68. CRITICAL REQUIREMENT
+
+DO NOT OMIT THESE THREE MAJOR FEATURES:
+
+## RESPONDER MODE
+
+RESPONDER MODE
+
+🔴 3 CRITICAL
+🟠 5 HIGH
+🟡 7 MODERATE
+
+ACTIVE INCIDENTS
+
+🔴 A104
+3 hops • 8 sec
+
+🔴 A102
+4 hops • 12 sec
+
+🟠 A098
+2 hops • 35 sec
+
+[ NETWORK TOPOLOGY ]
+
+---
+
+## ACTIVE MESH TOPOLOGY
+
+USER
+ ↓
+N207
+ ↓
+N312
+ ↓
+RESPONDER
+
+Show this graphically.
+
+---
+
+## MESSAGES
+
+🔴 SOS #A104
+Delivered • 12 sec
+3 hops
+
+🟠 Assistance #A102
+Relaying • 2 hops
+
+⚠ Status #A099
+Delivery interrupted
+
+These are mandatory core features.
+
+---
+
+# 69. FINAL QUALITY BAR
+
+The final UI should answer these questions immediately:
+
+1. Can I send an SOS?
+2. Is my mesh working?
+3. Is internet unavailable?
+4. Can my device still communicate?
+5. Are there nearby nodes?
+6. Which nodes can relay my message?
+7. Where is my SOS currently?
+8. How many hops has it travelled?
+9. Did the responder receive it?
+10. If the route failed, what happened?
+11. Is another route available?
+12. What emergencies are active?
+13. Which emergency is most critical?
+14. Can the responder acknowledge it?
+15. Can the responder send a response?
+16. How healthy is my battery?
+17. What is the current network topology?
+
+If the user can answer these questions easily, the UI is successful.
+
+---
+
+# 70. FINAL PRODUCT STORY
+
+The entire application should visually communicate:
+
+                    EMERGENCY
+                         ↓
+                   CREATE SOS
+                         ↓
+                  NODE DISCOVERY
+                         ↓
+                  RELAY DISCOVERY
+                         ↓
+                    N207 RELAY
+                         ↓
+                    N312 RELAY
+                         ↓
+                     RESPONDER
+                         ↓
+                    DELIVERED
+                         ↓
+                  ACKNOWLEDGED
+                         ↓
+                    RESPONDING
+
+Failure path:
+
+                   CONNECTION LOST
+                         ↓
+                    SOS QUEUED
+                         ↓
+                SEARCHING FOR RELAY
+                         ↓
+                 ALTERNATE ROUTE
+                         ↓
+                  TRANSMISSION
+                         ↓
+                     DELIVERED
+
+The UI must make this story visually understandable without requiring the judge to read technical documentation.
+
+---
+
+# 71. CODEX IMPLEMENTATION INSTRUCTION
+
+Read this entire specification before modifying the project.
+
+First:
+
+1. Inspect the existing project.
+2. Identify whether it is an Android/Jetpack Compose project.
+3. Inspect existing Gradle configuration.
+4. Inspect existing source files.
+5. Preserve working code.
+6. Do not unnecessarily recreate the project.
+7. Identify missing dependencies.
+8. Implement the UI incrementally.
+9. Keep mock/demo data separate from UI.
+10. Use reusable Compose components.
+11. Implement navigation.
+12. Implement all mandatory screens.
+13. Implement all major states.
+14. Implement topology visualization.
+15. Implement SOS workflow.
+16. Implement messages.
+17. Implement responder workflow.
+18. Implement failure/recovery states.
+19. Run/build the project.
+20. Fix compilation errors.
+21. Fix runtime/navigation issues.
+22. Verify every mandatory feature checklist item.
+
+Do not stop after creating the Dashboard.
+
+Do not omit:
+
+- Responder Mode
+- Messages
+- Message Details
+- Mesh Topology
+- Active Route
+- Relay/Hop information
+- Connection Failure
+- Offline Queue
+- Recovery
+- Incident Details
+
+The UI must be professional enough for a hackathon final demonstration.
+
+Do not implement fake real networking.
+
+Use demo/mock state only where necessary and keep it clearly separated so real mesh services can later replace it.
+
+When technical limitations prevent a feature from being implemented exactly as specified, preserve the UX intent and implement the closest technically appropriate version without breaking the application.
+
+After implementation, verify that the complete emergency workflow works from:
+
+Dashboard
+→ SOS
+→ Transmission
+→ Relay
+→ Topology
+→ Messages
+→ Responder
+→ Incident
+→ Acknowledgement
+→ Failure
+→ Recovery
+→ Delivery
