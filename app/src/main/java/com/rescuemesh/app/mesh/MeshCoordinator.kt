@@ -245,6 +245,14 @@ class MeshCoordinator(
         neighbors.refreshLiveness()
     }
 
+    fun clearLocalMeshData() {
+        scope.launch {
+            stopDiscovery()
+            repository.clearLocalMeshData()
+            neighbors.clear()
+        }
+    }
+
     fun createSos(
         text: String, 
         priority: Int = 0, 
@@ -266,8 +274,9 @@ class MeshCoordinator(
             performanceTracker.trackMessageStart(message.messageId.toByteArray().toHex())
             val inserted = repository.persistCreatedMessage(message)
             if (inserted) {
-                val forwards = gattClient.sendMeshMessage(message)
-                Log.i("ROUTE", "Initial route selected for SOS: forwards_started=$forwards")
+                val clientForwards = gattClient.sendMeshMessage(message)
+                val serverForwards = gattServer.sendMeshMessage(message)
+                Log.i("ROUTE", "Initial route selected for SOS: client=$clientForwards server=$serverForwards")
             }
         }
     }
@@ -399,6 +408,10 @@ class MeshCoordinator(
                         message = message,
                         excludePeerNodeId = entity.previousHopNodeId
                     )
+                    gattServer.sendMeshMessage(
+                        message = message,
+                        excludePeerNodeId = entity.previousHopNodeId
+                    )
                 }
             }
     }
@@ -489,6 +502,10 @@ private class MutableNeighborTable {
             current += next
         }
         rows.value = current
+    }
+
+    fun clear() {
+        rows.value = emptyList()
     }
 
     fun shouldAttemptConnection(address: String): Boolean {

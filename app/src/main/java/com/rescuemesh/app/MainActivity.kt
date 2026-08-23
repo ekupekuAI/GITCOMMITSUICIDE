@@ -12,13 +12,20 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -125,44 +132,65 @@ private fun RescueMeshApp() {
         bottomBar = {
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentDestination = navBackStackEntry?.destination
-            
-            NavigationBar(
-                containerColor = Color(0xFF090B10),
-                contentColor = Color.White,
-                tonalElevation = 8.dp
+            val items = listOf(Screen.Home, Screen.Neighbors, Screen.Messages, Screen.Topology, Screen.Settings)
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    .height(62.dp)
+                    .clip(RoundedCornerShape(32.dp))
+                    .background(Color.Black)
+                    .padding(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                val items = listOf(Screen.Home, Screen.Neighbors, Screen.Messages, Screen.Topology, Screen.Diagnostics, Screen.Settings)
                 items.forEach { screen ->
                     val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
-                    NavigationBarItem(
-                        icon = { 
-                            Icon(
-                                screen.icon, 
-                                contentDescription = screen.label,
-                                tint = if (selected) Color(0xFF4CD964) else Color.Gray
-                            ) 
-                        },
-                        label = { 
-                            Text(
-                                screen.label, 
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selected) Color.White else Color.Gray
-                            ) 
-                        },
-                        selected = selected,
-                        colors = NavigationBarItemDefaults.colors(
-                            indicatorColor = Color(0xFF4CD964).copy(alpha = 0.1f)
-                        ),
-                        onClick = {
-                            navController.navigate(screen.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(if (selected) RoundedCornerShape(24.dp) else CircleShape)
+                            .background(if (selected) Color(0xFF3B3B3B) else Color.Transparent)
+                            .shadow(
+                                elevation = if (selected) 10.dp else 0.dp,
+                                shape = if (selected) RoundedCornerShape(24.dp) else CircleShape,
+                                ambientColor = if (selected) Color(0xFF10B981) else Color.Transparent,
+                                spotColor = if (selected) Color(0xFF10B981) else Color.Transparent,
+                            )
+                            .clickable {
+                                navController.navigate(screen.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = screen.icon,
+                                contentDescription = screen.label,
+                                modifier = Modifier.size(18.dp),
+                                tint = if (selected) Color.White else Color(0xFFD7D7D7),
+                            )
+                            if (selected) {
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = screen.label,
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                )
                             }
                         }
-                    )
+                    }
                 }
             }
         }
@@ -227,7 +255,8 @@ private fun RescueMeshApp() {
                             coordinator.stopDiscovery()
                             coordinator.startDiscovery()
                         }
-                    }
+                    },
+                    onClearLocalData = { coordinator.clearLocalMeshData() },
                 )
             }
         }

@@ -23,12 +23,14 @@ fun SettingsScreen(
     currentNodeName: String,
     currentNodeRole: NodeRole,
     onSaveName: (String) -> Unit,
-    onSaveRole: (NodeRole) -> Unit
+    onSaveRole: (NodeRole) -> Unit,
+    onClearLocalData: () -> Unit,
 ) {
     var nameInput by remember { mutableStateOf(currentNodeName) }
     var authCode by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
     var showAuthError by remember { mutableStateOf(false) }
+    var showClearConfirmation by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -161,6 +163,21 @@ fun SettingsScreen(
                 DiagnosticItem("Local Database", "Operational")
             }
             item {
+                SectionHeader("TEST RESET")
+                GlassPanel(modifier = Modifier.fillMaxWidth(), color = EmergencyRed.copy(alpha = 0.08f)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Clear local messages, receipts, neighbors, incidents, and relay history.", color = TextSecondary)
+                        OutlinedButton(
+                            onClick = { showClearConfirmation = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = EmergencyRed),
+                        ) {
+                            Text("CLEAR LOCAL MESH DATA", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+            item {
                 Spacer(modifier = Modifier.height(20.dp))
                 Text(
                     "PROTOTYPE NOTICE: Responder roles in this version use a static auth code (RESCUE112) for verification. True production requires a signed certificate from an emergency coordinator.",
@@ -169,6 +186,23 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+
+    if (showClearConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirmation = false },
+            title = { Text("Clear local mesh data?") },
+            text = { Text("This removes this device's stored messages and network history. Other devices are not affected.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearConfirmation = false
+                    onClearLocalData()
+                }) { Text("CLEAR", color = EmergencyRed) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirmation = false }) { Text("CANCEL") }
+            },
+        )
     }
 }
 

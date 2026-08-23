@@ -24,6 +24,14 @@ class MessageRepository(
         )
     }
 
+    suspend fun clearLocalMeshData() {
+        dao.clearForwardAttempts()
+        dao.clearMessages()
+        dao.clearReceipts()
+        dao.clearNeighbors()
+        dao.clearIncidents()
+    }
+
     suspend fun upsertKnownNeighbor(
         nodeId: ByteArray,
         rssi: Int,

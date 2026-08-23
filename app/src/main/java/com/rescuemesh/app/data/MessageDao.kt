@@ -36,8 +36,23 @@ interface MessageDao {
     @Query("SELECT * FROM neighbors ORDER BY last_seen_at_ms DESC")
     fun observeNeighbors(): Flow<List<NeighborEntity>>
 
-    @Query("SELECT * FROM messages WHERE state IN ('PERSISTED', 'QUEUED', 'WAITING_FOR_NEIGHBOR') AND expires_at_ms > :nowMs ORDER BY priority ASC, created_at_ms ASC LIMIT :limit")
+    @Query("SELECT * FROM messages WHERE state IN ('PERSISTED', 'QUEUED', 'WAITING_FOR_NEIGHBOR') AND expires_at_ms > :nowMs ORDER BY priority DESC, created_at_ms ASC LIMIT :limit")
     suspend fun pendingMessages(nowMs: Long, limit: Int = 50): List<MessageEntity>
+
+    @Query("DELETE FROM forward_attempts")
+    suspend fun clearForwardAttempts()
+
+    @Query("DELETE FROM messages")
+    suspend fun clearMessages()
+
+    @Query("DELETE FROM message_receipts")
+    suspend fun clearReceipts()
+
+    @Query("DELETE FROM neighbors")
+    suspend fun clearNeighbors()
+
+    @Query("DELETE FROM incidents")
+    suspend fun clearIncidents()
 
     @Query("UPDATE messages SET state = :state WHERE message_id = :messageId")
     suspend fun updateMessageState(messageId: ByteArray, state: String)

@@ -10,6 +10,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,6 +70,13 @@ fun StatusTile(
 
 @Composable
 fun StatusPill(label: String, accent: Color) {
+    val transition = rememberInfiniteTransition(label = "status-pulse")
+    val pulse by transition.animateFloat(
+        initialValue = 0.55f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1100), RepeatMode.Reverse),
+        label = "status-alpha",
+    )
     Row(
         modifier = Modifier
             .clip(CircleShape)
@@ -81,7 +90,7 @@ fun StatusPill(label: String, accent: Color) {
             modifier = Modifier
                 .size(6.dp)
                 .clip(CircleShape)
-                .background(accent),
+                .background(accent.copy(alpha = pulse)),
         )
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
     }

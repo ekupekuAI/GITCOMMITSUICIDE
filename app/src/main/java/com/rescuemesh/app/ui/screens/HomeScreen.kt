@@ -3,6 +3,8 @@ package com.rescuemesh.app.ui.screens
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -187,6 +190,7 @@ private fun QuickActions(context: android.content.Context) {
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun SosTriggerButton(onClick: () -> Unit) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val scale by infiniteTransition.animateFloat(
@@ -196,19 +200,25 @@ private fun SosTriggerButton(onClick: () -> Unit) {
         label = "scale"
     )
 
-    Button(
-        onClick = onClick,
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(90.dp)
-            .scale(scale),
-        colors = ButtonDefaults.buttonColors(containerColor = EmergencyRed),
-        shape = RoundedCornerShape(24.dp),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 12.dp)
+            .scale(scale)
+            .shadow(18.dp, RoundedCornerShape(24.dp), ambientColor = EmergencyRed, spotColor = EmergencyRed)
+            .clip(RoundedCornerShape(24.dp))
+            .background(
+                Brush.verticalGradient(listOf(Color(0xFFFF5B5B), EmergencyRed, Color(0xFF9F1D2D))),
+            )
+            .combinedClickable(
+                onClick = {},
+                onLongClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("TRIGGER SOS", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
-            Text("BROADCAST OFFLINE SIGNAL", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.85f))
+            Text("HOLD TO CONFIRM", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.85f))
         }
     }
 }
@@ -274,6 +284,8 @@ private fun MeshStatusCard(
                     color = TextSecondary
                 )
             }
+
+            SignalWave(active = discoveryRequested)
             
             Switch(
                 checked = discoveryRequested,
@@ -284,6 +296,32 @@ private fun MeshStatusCard(
                     uncheckedThumbColor = Color.Gray,
                     uncheckedTrackColor = Color.DarkGray.copy(alpha = 0.5f)
                 )
+            )
+        }
+    }
+}
+
+@Composable
+private fun SignalWave(active: Boolean) {
+    val transition = rememberInfiniteTransition(label = "signal-wave")
+    val wave by transition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "signal-strength",
+    )
+    Row(
+        modifier = Modifier.width(42.dp).height(28.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        listOf(0.35f, 0.6f, 0.85f, 1f).forEach { level ->
+            Box(
+                modifier = Modifier
+                    .width(6.dp)
+                    .fillMaxHeight(level)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(if (active) EmergencyTeal.copy(alpha = level * wave) else Color.Gray.copy(alpha = 0.35f)),
             )
         }
     }

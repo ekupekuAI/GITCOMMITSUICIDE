@@ -113,6 +113,7 @@ class GattServer(
     fun sendMeshMessage(message: MeshMessage, excludePeerNodeId: ByteArray? = null): Int {
         if (!hasConnectPermission()) return 0
         val payload = ProtocolCodec.encodeMeshMessage(message)
+        val messageIdHex = message.messageId.toByteArray().toHexKeyForRelay()
         var sent = 0
         subscribedDevices.toList().forEach { device ->
             val peerNodeId = peerNodeIdsByAddress[device.address]
@@ -120,6 +121,7 @@ class GattServer(
             if (excludePeerNodeId != null && peerNodeId.contentEquals(excludePeerNodeId)) return@forEach
             notifyData(device, payload)
             sent += 1
+            Log.i("RELAY", "messageId=$messageIdHex from=${localNodeId.toHexKeyForRelay()} to=${peerNodeId.toHexKeyForRelay()} hopCount=${message.hopCount}")
         }
         return sent
     }
@@ -334,3 +336,5 @@ class GattServer(
 }
 
 private fun ByteArray.toHexKey(): String = joinToString(separator = "") { "%02x".format(it) }
+
+private fun ByteArray.toHexKeyForRelay(): String = joinToString(separator = "") { "%02x".format(it) }

@@ -191,7 +191,7 @@ class GattClient(
         var started = 0
         sortedTargets.forEach { gatt ->
             val address = gatt.device.address
-            val peerNodeId = peerNodeIdsByAddress[address]
+            val peerNodeId = peerNodeIdsByAddress[address] ?: return@forEach
             if (
                 (excludePeerNodeId != null && peerNodeId?.contentEquals(excludePeerNodeId) == true) ||
                 peerNodeId?.contentEquals(message.originNodeId.toByteArray()) == true
@@ -224,6 +224,7 @@ class GattClient(
             enqueueWrite(gatt, GattWriteOperation.Characteristic(dataRx, payload, key))
             
             started += 1
+            Log.i("RELAY", "messageId=$messageIdHex from=${localNodeId.toHexKey()} to=${peerNodeId.toHexKey()} hopCount=${message.hopCount}")
             Log.i("GATT_CLIENT", "DATA QUEUED: $address (Role: ${peerRolesByAddress[address]})")
             _events.tryEmit(BleTransportEvent.MessageSent(gatt.device, message.messageId.toByteArray()))
         }
