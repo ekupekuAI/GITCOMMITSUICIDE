@@ -31,7 +31,7 @@ fun SosScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0D0202))
+            .background(MaterialTheme.colorScheme.background)
             .padding(24.dp)
     ) {
         Column(

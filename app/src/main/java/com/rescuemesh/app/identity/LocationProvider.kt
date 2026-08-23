@@ -19,15 +19,20 @@ class LocationProvider(private val context: Context) {
         }
     }
 
+    private var lastLocation: android.location.Location? = null
+
     @SuppressLint("MissingPermission")
     suspend fun getCurrentLocation(): Location? {
         val activeClient = client ?: return null
         return try {
-            activeClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null).asDeferred().await()
+            activeClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
+                .asDeferred().await().also { lastLocation = it }
         } catch (e: Exception) {
             null
         }
     }
+
+    fun getLastCachedLocation(): Location? = lastLocation
 
     private fun isGooglePlayServicesAvailable(): Boolean {
         val availability = GoogleApiAvailability.getInstance()

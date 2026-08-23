@@ -130,7 +130,8 @@ fun TopologyView(
                 
                 val isConnected = neighbor.connectionState == "CONNECTED" || 
                                 neighbor.connectionState == "ACK_RECEIVED" ||
-                                neighbor.connectionState == "HELLO_RECEIVED"
+                                neighbor.connectionState == "HELLO_RECEIVED" ||
+                                neighbor.connectionState == "READY"
                 
                 val isResponder = neighbor.role != null && 
                                 neighbor.role != com.rescuemesh.app.protocol.NodeRole.NODE_ROLE_PUBLIC_RELAY
@@ -148,6 +149,22 @@ fun TopologyView(
                     strokeWidth = (1.5.dp.toPx() * (1 + pulse)),
                     pathEffect = if (!isConnected) PathEffect.dashPathEffect(floatArrayOf(20f, 20f), 0f) else null
                 )
+
+                if (isConnected && neighbor.distanceMeters != null) {
+                    drawText(
+                        textMeasurer = textMeasurer,
+                        text = "%.0f m".format(neighbor.distanceMeters),
+                        topLeft = Offset(
+                            centerX + (x - centerX) * 0.5f - 16.dp.toPx(),
+                            centerY + (y - centerY) * 0.5f - 8.dp.toPx(),
+                        ),
+                        style = TextStyle(
+                            color = TextPrimary,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                        ),
+                    )
+                }
                 
                 // Data transmission particles (moving dots)
                 if (isConnected) {
@@ -176,7 +193,7 @@ fun TopologyView(
                 
                 drawText(
                     textMeasurer = textMeasurer,
-                    text = neighbor.peerNodeId?.take(10) ?: "DISCOVERING",
+                    text = neighbor.name ?: neighbor.peerNodeId?.take(10) ?: "DISCOVERING",
                     topLeft = Offset(x - 35.dp.toPx(), y + 25.dp.toPx()),
                     style = TextStyle(
                         color = if (isResponder) EmergencyRed else TextPrimary, 

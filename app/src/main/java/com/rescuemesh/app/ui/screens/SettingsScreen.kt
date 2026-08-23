@@ -33,7 +33,7 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF090B10))
+            .background(MaterialTheme.colorScheme.background)
             .padding(18.dp)
     ) {
         Text("Node Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)

@@ -75,10 +75,11 @@ class BleScanner(
             .setServiceUuid(BleConstants.MeshServiceParcelUuid)
             .build()
         val settings = ScanSettings.Builder()
-            .setScanMode(MeshConfig.getScanMode(powerMode))
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY) // High performance
             .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
             .setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
             .setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)
+            .setReportDelay(0) // Immediate reporting
             .build()
 
         val scanCallback = object : ScanCallback() {
@@ -100,10 +101,13 @@ class BleScanner(
 
             private fun emit(result: ScanResult) {
                 Log.i("BLE_SCAN", "DISCOVERED: ${result.device.address} (${result.device.name ?: "Unknown"}) RSSI=${result.rssi}")
+                val token = result.scanRecord?.getServiceData(BleConstants.MeshServiceParcelUuid)
+                
                 _observations.tryEmit(
                     ScanObservation(
                         device = result.device,
                         rssi = result.rssi,
+                        arbitrationToken = token,
                         observedAtElapsedMs = SystemClock.elapsedRealtime(),
                     ),
                 )
@@ -140,6 +144,7 @@ class BleScanner(
 data class ScanObservation(
     val device: BluetoothDevice,
     val rssi: Int,
+    val arbitrationToken: ByteArray?,
     val observedAtElapsedMs: Long,
 )
 

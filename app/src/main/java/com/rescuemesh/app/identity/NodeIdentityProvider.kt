@@ -38,6 +38,17 @@ class NodeIdentityProvider(
     val displayId: String
         get() = nodeName.ifBlank { nodeId.toDisplayNodeId() }
 
+    private var lastLocation: android.location.Location? = null
+    private var lastBattery: Int = 0
+
+    fun updateState(location: android.location.Location?, battery: Int) {
+        lastLocation = location
+        lastBattery = battery
+    }
+
+    fun getLastLocation() = lastLocation
+    fun getBattery() = lastBattery
+
     private companion object {
         const val KEY_NODE_ID = "node_id"
         const val KEY_NODE_NAME = "node_name"

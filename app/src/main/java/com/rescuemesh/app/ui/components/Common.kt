@@ -54,7 +54,7 @@ fun StatusTile(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(label, color = TextSecondary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-            Text(value, fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineSmall, color = Color.White)
+            Text(value, fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
             Box(
                 modifier = Modifier
                     .height(4.dp)
@@ -71,7 +71,7 @@ fun StatusPill(label: String, accent: Color) {
     Row(
         modifier = Modifier
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.05f))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
             .border(BorderStroke(1.dp, accent.copy(alpha = 0.3f)), CircleShape)
             .padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -83,7 +83,7 @@ fun StatusPill(label: String, accent: Color) {
                 .clip(CircleShape)
                 .background(accent),
         )
-        Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White, fontWeight = FontWeight.SemiBold)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -92,7 +92,7 @@ fun SectionTitle(text: String) {
     Text(
         text = text,
         modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
-        color = Color.White.copy(alpha = 0.6f),
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.Black,
         letterSpacing = androidx.compose.ui.unit.TextUnit.Unspecified

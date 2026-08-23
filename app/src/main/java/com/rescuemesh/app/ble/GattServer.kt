@@ -19,6 +19,8 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.rescuemesh.app.protocol.ControlMessage
 import com.rescuemesh.app.protocol.ControlType
+import com.rescuemesh.app.protocol.MeshMessage
+import com.rescuemesh.app.protocol.NodeRole
 import com.rescuemesh.app.protocol.ProtocolCodec
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -84,6 +86,23 @@ class GattServer(
     }
 
     @SuppressLint("MissingPermission")
+    fun acknowledgeHello(
+        device: BluetoothDevice, 
+        role: NodeRole,
+        battery: Int,
+        latitude: Double?,
+        longitude: Double?
+    ) {
+        val message = ProtocolCodec.ack(
+            nodeId = localNodeId, 
+            role = role,
+            batteryPercentage = battery,
+            latitude = latitude,
+            longitude = longitude
+        )
+        notifyControl(device, message)
+    }
+
     fun acknowledgeMessagePersisted(device: BluetoothDevice, messageId: ByteArray) {
         val messageIdHex = messageId.toHexKey()
         Log.d("GATT_SERVER", "Sending ACK for message $messageIdHex to ${device.address}")
@@ -91,9 +110,28 @@ class GattServer(
     }
 
     @SuppressLint("MissingPermission")
+    fun sendMeshMessage(message: MeshMessage, excludePeerNodeId: ByteArray? = null): Int {
+        if (!hasConnectPermission()) return 0
+        val payload = ProtocolCodec.encodeMeshMessage(message)
+        var sent = 0
+        subscribedDevices.toList().forEach { device ->
+            val peerNodeId = peerNodeIdsByAddress[device.address]
+            if (peerNodeId == null || peerNodeId.contentEquals(localNodeId)) return@forEach
+            if (excludePeerNodeId != null && peerNodeId.contentEquals(excludePeerNodeId)) return@forEach
+            notifyData(device, payload)
+            sent += 1
+        }
+        return sent
+    }
+
+    @SuppressLint("MissingPermission")
     private fun notifyControl(device: BluetoothDevice, message: ControlMessage) {
+        notifyData(device, ProtocolCodec.encodeControl(message))
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun notifyData(device: BluetoothDevice, bytes: ByteArray) {
         val address = device.address
-        val bytes = ProtocolCodec.encodeControl(message)
         val queue = notificationQueues.getOrPut(address) { ArrayDeque() }
         queue.addLast(bytes)
         processNextNotification(device)
@@ -245,17 +283,18 @@ class GattServer(
                         BleTransportEvent.HelloReceived(
                             device = device, 
                             peerNodeId = peerNodeId,
-                            role = message.role
+                            role = message.role,
+                            batteryPercentage = message.batteryPercentage,
+                            latitude = if (message.hasLocation()) message.location.latitude else null,
+                            longitude = if (message.hasLocation()) message.location.longitude else null
                         )
                     )
                     
                     Log.d("GATT_SERVER", "Sending HELLO ACK to ${device.address}")
-                    notifyControl(
-                        device,
-                        ProtocolCodec.ack(localNodeId, identityProvider.nodeRole),
-                    )
+                    // notifyControl will be triggered by MeshCoordinator after gathering local state
                 }
             }
+        // ...
             .onFailure { error ->
                 Log.e("GATT_SERVER", "Failed to decode control message from ${device.address}: ${error.message}")
                 _events.tryEmit(BleTransportEvent.Error(device, "Malformed control message: ${error.message}"))

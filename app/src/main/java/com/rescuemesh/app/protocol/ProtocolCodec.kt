@@ -25,23 +25,55 @@ object ProtocolCodec {
         }
     }
 
-    fun hello(nodeId: ByteArray, role: NodeRole = NodeRole.NODE_ROLE_PUBLIC_RELAY): ControlMessage {
-        return ControlMessage.newBuilder()
+    fun hello(
+        nodeId: ByteArray, 
+        role: NodeRole = NodeRole.NODE_ROLE_PUBLIC_RELAY,
+        batteryPercentage: Int = 0,
+        latitude: Double? = null,
+        longitude: Double? = null
+    ): ControlMessage {
+        val builder = ControlMessage.newBuilder()
             .setType(ControlType.CONTROL_TYPE_HELLO)
             .setProtocolVersion(WireFrameCodec.PROTOCOL_VERSION.toInt())
             .setNodeId(ByteString.copyFrom(nodeId))
             .setRole(role)
+            .setBatteryPercentage(batteryPercentage)
             .addCapabilities("phase4-framed-protobuf")
-            .build()
+
+        if (latitude != null && longitude != null) {
+            builder.location = Location.newBuilder()
+                .setLatitude(latitude)
+                .setLongitude(longitude)
+                .setTimestampMs(System.currentTimeMillis())
+                .build()
+        }
+
+        return builder.build()
     }
 
-    fun ack(nodeId: ByteArray, role: NodeRole = NodeRole.NODE_ROLE_PUBLIC_RELAY): ControlMessage {
-        return ControlMessage.newBuilder()
+    fun ack(
+        nodeId: ByteArray, 
+        role: NodeRole = NodeRole.NODE_ROLE_PUBLIC_RELAY,
+        batteryPercentage: Int = 0,
+        latitude: Double? = null,
+        longitude: Double? = null
+    ): ControlMessage {
+        val builder = ControlMessage.newBuilder()
             .setType(ControlType.CONTROL_TYPE_ACK)
             .setProtocolVersion(WireFrameCodec.PROTOCOL_VERSION.toInt())
             .setNodeId(ByteString.copyFrom(nodeId))
             .setRole(role)
-            .build()
+            .setBatteryPercentage(batteryPercentage)
+
+        if (latitude != null && longitude != null) {
+            builder.location = Location.newBuilder()
+                .setLatitude(latitude)
+                .setLongitude(longitude)
+                .setTimestampMs(System.currentTimeMillis())
+                .build()
+        }
+
+        return builder.build()
     }
 
     fun ackMessage(nodeId: ByteArray, messageId: ByteArray): ControlMessage {

@@ -4,7 +4,7 @@ import android.bluetooth.le.AdvertiseSettings
 import android.bluetooth.le.ScanSettings
 
 object MeshConfig {
-    const val MAX_CLIENT_CONNECTIONS = 3
+    const val MAX_CLIENT_CONNECTIONS = 8
     const val PREFERRED_RELAY_FANOUT = 2
     const val NEIGHBOR_STALE_TIMEOUT_MS = 15_000L
     const val NEIGHBOR_LOST_TIMEOUT_MS = 45_000L

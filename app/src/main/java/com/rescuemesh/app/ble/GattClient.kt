@@ -18,8 +18,11 @@ import com.rescuemesh.app.mesh.MeshConfig
 import com.rescuemesh.app.protocol.ControlType
 import com.rescuemesh.app.protocol.MeshMessage
 import com.rescuemesh.app.protocol.ProtocolCodec
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.launch
 import java.util.UUID
 
 class GattClient(
@@ -37,41 +40,60 @@ class GattClient(
     // Per-device write queue to avoid GATT busy errors
     private val writeQueues = mutableMapOf<String, ArrayDeque<GattWriteOperation>>()
     private val isWriting = mutableMapOf<String, Boolean>()
+    private val writingMessageKeys = mutableMapOf<String, String>()
+    
+    // Connection watchdog tracking
+    private val watchdogJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
+    private val serviceDiscoveryStarted = mutableSetOf<String>()
 
     private val _events = MutableSharedFlow<BleTransportEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<BleTransportEvent> = _events
 
+    private val scope = CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+
     private sealed class GattWriteOperation {
-        data class Characteristic(val characteristic: BluetoothGattCharacteristic, val value: ByteArray) : GattWriteOperation()
+        data class Characteristic(
+            val characteristic: BluetoothGattCharacteristic,
+            val value: ByteArray,
+            val messageKey: String? = null,
+        ) : GattWriteOperation()
         data class Descriptor(val descriptor: BluetoothGattDescriptor, val value: ByteArray) : GattWriteOperation()
     }
 
     @SuppressLint("MissingPermission")
     fun connect(device: BluetoothDevice) {
         val key = device.address ?: return
-        Log.d("GATT_CLIENT", "Connect requested for $key. Active connections: ${connections.size}")
         
-        if (connections.containsKey(key)) {
-            Log.d("GATT_CLIENT", "Already connected/connecting to $key, skipping")
-            return
-        }
+        if (connections.containsKey(key)) return
         if (connections.size >= MeshConfig.MAX_CLIENT_CONNECTIONS) {
-            Log.w("GATT_CLIENT", "Max connections reached, skipping $key")
+            Log.w("GATT_CLIENT", "Max slots reached, prioritizing existing links")
             return
         }
+        
         val backoff = backoffUntilElapsedMs[key] ?: 0L
-        if (backoff > SystemClock.elapsedRealtime()) {
-            Log.d("GATT_CLIENT", "Backoff active for $key, skipping")
-            return
-        }
-        if (!hasConnectPermission()) {
-            Log.e("GATT_CLIENT", "Permission missing for connect")
-            _events.tryEmit(BleTransportEvent.Error(device, "BLUETOOTH_CONNECT permission missing"))
-            return
-        }
+        if (backoff > SystemClock.elapsedRealtime()) return
 
-        Log.i("GATT_CLIENT", "INITIATING CONNECT: $key")
-        connections[key] = device.connectGatt(appContext, false, callback, BluetoothDevice.TRANSPORT_LE)
+        Log.i("GATT_CLIENT", "FAST CONNECT: $key")
+        val gatt = device.connectGatt(
+            appContext, 
+            false, 
+            callback, 
+            BluetoothDevice.TRANSPORT_LE,
+            BluetoothDevice.PHY_LE_1M_MASK
+        )
+        connections[key] = gatt
+        startWatchdog(key, gatt)
+    }
+
+    private fun startWatchdog(address: String, gatt: BluetoothGatt) {
+        watchdogJobs[address]?.cancel()
+        watchdogJobs[address] = scope.launch {
+            kotlinx.coroutines.delay(30_000)
+            if (connections[address] == gatt && !peerNodeIdsByAddress.containsKey(address)) {
+                Log.w("GATT_CLIENT", "Watchdog: Handshake timeout for $address. Resetting.")
+                closeGatt(gatt, "Handshake timeout")
+            }
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -86,6 +108,13 @@ class GattClient(
         connections.clear()
         sentMessageKeys.clear()
         peerNodeIdsByAddress.clear()
+        peerRolesByAddress.clear()
+        writeQueues.clear()
+        isWriting.clear()
+        writingMessageKeys.clear()
+        serviceDiscoveryStarted.clear()
+        watchdogJobs.values.forEach { it.cancel() }
+        watchdogJobs.clear()
     }
 
     @SuppressLint("MissingPermission")
@@ -106,11 +135,14 @@ class GattClient(
         
         val next = queue.removeFirst()
         isWriting[address] = true
+        if (next is GattWriteOperation.Characteristic) {
+            next.messageKey?.let { writingMessageKeys[address] = it }
+        }
         
         val success = when (next) {
             is GattWriteOperation.Characteristic -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    gatt.writeCharacteristic(next.characteristic, next.value, next.characteristic.writeType) == BluetoothGatt.GATT_SUCCESS
+                    gatt.writeCharacteristic(next.characteristic, next.value, next.characteristic.writeType) == android.bluetooth.BluetoothStatusCodes.SUCCESS
                 } else {
                     @Suppress("DEPRECATION")
                     next.characteristic.value = next.value
@@ -120,7 +152,7 @@ class GattClient(
             }
             is GattWriteOperation.Descriptor -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    gatt.writeDescriptor(next.descriptor, next.value) == BluetoothGatt.GATT_SUCCESS
+                    gatt.writeDescriptor(next.descriptor, next.value) == android.bluetooth.BluetoothStatusCodes.SUCCESS
                 } else {
                     @Suppress("DEPRECATION")
                     next.descriptor.value = next.value
@@ -132,6 +164,7 @@ class GattClient(
         
         if (!success) {
             Log.e("GATT_CLIENT", "Write failed to start for $address")
+            writingMessageKeys.remove(address)?.let(sentMessageKeys::remove)
             isWriting[address] = false
             processNextWrite(gatt)
         }
@@ -148,7 +181,7 @@ class GattClient(
         Log.d("GATT_CLIENT", "SendMeshMessage: ID=$messageIdHex, targets=${connections.size}")
 
         // Categorize targets: Responders vs Relays
-        val targets = connections.values.toList()
+        val targets = connections.values.filter { peerNodeIdsByAddress.containsKey(it.device.address) }
         val responders = targets.filter { isResponderFor(peerRolesByAddress[it.device.address], message.category) }
         val relays = targets.filter { !responders.contains(it) }
 
@@ -159,8 +192,11 @@ class GattClient(
         sortedTargets.forEach { gatt ->
             val address = gatt.device.address
             val peerNodeId = peerNodeIdsByAddress[address]
-            if (excludePeerNodeId != null && peerNodeId?.contentEquals(excludePeerNodeId) == true) {
-                Log.d("GATT_CLIENT", "Skipping loopback/previous hop to $address")
+            if (
+                (excludePeerNodeId != null && peerNodeId?.contentEquals(excludePeerNodeId) == true) ||
+                peerNodeId?.contentEquals(message.originNodeId.toByteArray()) == true
+            ) {
+                Log.d("GATT_CLIENT", "Skipping previous hop or origin at $address")
                 return@forEach
             }
             
@@ -185,7 +221,7 @@ class GattClient(
             
             val payload = ProtocolCodec.encodeMeshMessage(message)
             dataRx.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-            enqueueWrite(gatt, GattWriteOperation.Characteristic(dataRx, payload))
+            enqueueWrite(gatt, GattWriteOperation.Characteristic(dataRx, payload, key))
             
             started += 1
             Log.i("GATT_CLIENT", "DATA QUEUED: $address (Role: ${peerRolesByAddress[address]})")
@@ -233,7 +269,18 @@ class GattClient(
         val service = gatt.getService(BleConstants.MeshServiceUuid)
         val control = service?.getCharacteristic(BleConstants.ControlCharacteristicUuid) ?: return
 
-        val payload = ProtocolCodec.encodeControl(ProtocolCodec.hello(localNodeId, identityProvider.nodeRole))
+        val localLoc = identityProvider.getLastLocation() // I'll add this to identityProvider
+        val battery = identityProvider.getBattery() // I'll add this too
+
+        val payload = ProtocolCodec.encodeControl(
+            ProtocolCodec.hello(
+                nodeId = localNodeId, 
+                role = identityProvider.nodeRole,
+                batteryPercentage = battery,
+                latitude = localLoc?.latitude,
+                longitude = localLoc?.longitude
+            )
+        )
         control.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
         enqueueWrite(gatt, GattWriteOperation.Characteristic(control, payload))
         _events.tryEmit(BleTransportEvent.HelloSent(gatt.device))
@@ -256,8 +303,20 @@ class GattClient(
                     Log.i("GATT_CLIENT", "CONNECTED: $address")
                     _events.tryEmit(BleTransportEvent.Connected(gatt.device))
                     if (hasConnectPermission()) {
-                        Log.d("GATT_CLIENT", "Requesting MTU 512 for $address")
-                        gatt.requestMtu(512)
+                        // Settle time for Samsung/Xiaomi stability
+                        scope.launch {
+                            delay(600)
+                            Log.d("GATT_CLIENT", "Requesting MTU 512 for $address")
+                            if (!gatt.requestMtu(512)) {
+                                discoverServices(gatt)
+                            }
+                        }
+                        scope.launch {
+                            delay(2_000)
+                            if (connections[address] == gatt) {
+                                discoverServices(gatt)
+                            }
+                        }
                     }
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
@@ -270,10 +329,7 @@ class GattClient(
         @SuppressLint("MissingPermission")
         override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
             Log.i("GATT_CLIENT", "onMtuChanged: ${gatt.device.address} mtu=$mtu status=$status")
-            if (hasConnectPermission()) {
-                Log.d("GATT_CLIENT", "Discovering services for ${gatt.device.address}")
-                gatt.discoverServices()
-            }
+            discoverServices(gatt)
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
@@ -325,6 +381,11 @@ class GattClient(
         ) {
             val address = gatt.device.address
             Log.d("GATT_CLIENT", "onCharacteristicWrite: $address status=$status")
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                writingMessageKeys.remove(address)?.let(sentMessageKeys::remove)
+            } else {
+                writingMessageKeys.remove(address)
+            }
             isWriting[address] = false
             processNextWrite(gatt)
         }
@@ -361,7 +422,10 @@ class GattClient(
                             BleTransportEvent.AckReceived(
                                 device = device,
                                 peerNodeId = message.nodeId.toByteArray(),
-                                role = message.role
+                                role = message.role,
+                                batteryPercentage = message.batteryPercentage,
+                                latitude = if (message.hasLocation()) message.location.latitude else null,
+                                longitude = if (message.hasLocation()) message.location.longitude else null
                             )
                         )
                     } else {
@@ -375,9 +439,32 @@ class GattClient(
                     }
                 }
             }
-            .onFailure { error ->
-                _events.tryEmit(BleTransportEvent.Error(device, "Malformed notification: ${error.message}"))
+            .onFailure {
+                ProtocolCodec.decodeMeshMessage(value)
+                    .onSuccess { message ->
+                        _events.tryEmit(
+                            BleTransportEvent.MessageReceived(
+                                device = device,
+                                message = message,
+                                sourcePeerNodeId = peerNodeIdsByAddress[device.address],
+                            ),
+                        )
+                    }
+                    .onFailure { error ->
+                        _events.tryEmit(BleTransportEvent.Error(device, "Malformed notification: ${error.message}"))
+                    }
             }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun discoverServices(gatt: BluetoothGatt) {
+        val address = gatt.device.address
+        if (!hasConnectPermission() || connections[address] != gatt || !serviceDiscoveryStarted.add(address)) return
+        Log.d("GATT_CLIENT", "Discovering services for $address")
+        if (!gatt.discoverServices()) {
+            serviceDiscoveryStarted.remove(address)
+            closeGatt(gatt, "Service discovery could not start")
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -388,6 +475,11 @@ class GattClient(
         peerRolesByAddress.remove(address)
         writeQueues.remove(address)
         isWriting.remove(address)
+        writingMessageKeys.remove(address)
+        serviceDiscoveryStarted.remove(address)
+        sentMessageKeys.removeAll { it.startsWith("$address:") }
+        watchdogJobs[address]?.cancel()
+        watchdogJobs.remove(address)
         backoffUntilElapsedMs[address] = SystemClock.elapsedRealtime() + MeshConfig.RECONNECT_BACKOFF_MS
         Log.i("BLE", "GATT closed for $address: $reason; backoff scheduled")
         if (hasConnectPermission()) {

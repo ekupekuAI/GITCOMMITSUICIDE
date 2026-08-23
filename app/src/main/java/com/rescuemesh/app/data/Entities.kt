@@ -103,6 +103,12 @@ data class NeighborEntity(
     val connectSuccesses: Int,
     @ColumnInfo(name = "connect_failures")
     val connectFailures: Int,
+    @ColumnInfo(name = "battery_percentage")
+    val batteryPercentage: Int?,
+    @ColumnInfo(name = "latitude")
+    val latitude: Double?,
+    @ColumnInfo(name = "longitude")
+    val longitude: Double?,
 )
 
 @Entity(

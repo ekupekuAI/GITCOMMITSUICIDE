@@ -26,7 +26,7 @@ fun DiagnosticsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF090B10))
+            .background(MaterialTheme.colorScheme.background)
             .padding(18.dp)
     ) {
         Text("System Diagnostics", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -119,7 +119,7 @@ private fun PowerModeButton(
         onClick = { onClick(mode) },
         colors = ButtonDefaults.buttonColors(
             containerColor = if (isSelected) EmergencyTeal else Color.Transparent,
-            contentColor = if (isSelected) Color.Black else Color.White
+            contentColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
         ),
         modifier = Modifier.height(40.dp),
         contentPadding = PaddingValues(horizontal = 12.dp)
@@ -131,7 +131,7 @@ private fun PowerModeButton(
 @Composable
 private fun DiagnosticsGlassPanel(
     modifier: Modifier = Modifier, 
-    color: Color = Color.White.copy(alpha = 0.08f),
+    color: Color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
     content: @Composable () -> Unit
 ) {
     Surface(

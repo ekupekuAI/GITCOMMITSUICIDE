@@ -14,6 +14,7 @@ import com.rescuemesh.app.ble.ScannerState
 import com.rescuemesh.app.data.MessageRepository
 import com.rescuemesh.app.data.ReceiveResult
 import com.rescuemesh.app.data.toProto
+import com.rescuemesh.app.identity.BatteryProvider
 import com.rescuemesh.app.identity.LocationProvider
 import com.rescuemesh.app.identity.NodeIdentityProvider
 import com.rescuemesh.app.identity.SecurityProvider
@@ -36,6 +37,7 @@ class MeshCoordinator(
     private val securityProvider: SecurityProvider,
     private val locationProvider: LocationProvider,
     private val sensorProvider: SensorProvider,
+    private val batteryProvider: BatteryProvider,
     private val advertiser: BleAdvertiser,
     private val scanner: BleScanner,
     private val gattServer: GattServer,
@@ -68,21 +70,47 @@ class MeshCoordinator(
         val impact = args[6] as Boolean
         val incidents = args[7] as List<com.rescuemesh.app.data.IncidentEntity>
 
+        val localLoc = locationProvider.getLastCachedLocation()
+
         MeshDiscoveryUiState(
             nodeId = identityProvider.displayId,
             advertiserState = advertiserState,
             scannerState = scannerState,
-            neighbors = neighborRows.sortedByDescending { it.lastSeenElapsedMs },
+            neighbors = neighborRows
+                .map { neighbor ->
+                    neighbor.copy(
+                        distanceMeters = if (
+                            localLoc != null && neighbor.latitude != null && neighbor.longitude != null
+                        ) {
+                            calculateDistance(
+                                localLoc.latitude,
+                                localLoc.longitude,
+                                neighbor.latitude,
+                                neighbor.longitude,
+                            )
+                        } else {
+                            null
+                        },
+                    )
+                }
+                .sortedByDescending { it.lastSeenElapsedMs },
             sosMessages = messages.map { message ->
+                val distance = if (localLoc != null && message.latitude != null && message.longitude != null) {
+                    calculateDistance(localLoc.latitude, localLoc.longitude, message.latitude, message.longitude)
+                } else null
+
                 SosUiModel(
                     id = message.messageId.toDisplayNodeId(),
+                    originNodeId = message.originNodeId.toDisplayNodeId(),
                     text = message.payload.decodeToString(),
                     state = message.state,
                     ttl = message.ttl,
                     hopCount = message.hopCount,
                     priority = message.priority,
+                    category = com.rescuemesh.app.protocol.EmergencyCategory.forNumber(message.category),
                     latitude = message.latitude,
-                    longitude = message.longitude
+                    longitude = message.longitude,
+                    distanceMeters = distance
                 )
             },
             performanceStats = stats,
@@ -117,14 +145,17 @@ class MeshCoordinator(
                 neighbors.record(observation.device, observation.rssi, observation.observedAtElapsedMs)
                 performanceTracker.recordDiscovery()
                 
-                val myPseudoId = identityProvider.nodeId.toHex()
-                val peerPseudoId = observation.device.address.replace(":", "").lowercase()
+                val myToken = identityProvider.nodeId.take(4).toByteArray().toHex()
+                val peerToken = observation.arbitrationToken?.toHex() ?: "00000000"
                 
-                if (myPseudoId > peerPseudoId) {
+                // Deterministic Arbitration with faster initiation and Token matching
+                if (myToken > peerToken) {
                     if (neighbors.shouldAttemptConnection(observation.device.address)) {
-                        Log.d("MESH", "Arbitration WON: Initiating connection to ${observation.device.address}")
+                        Log.d("MESH", "Arbitration WON ($myToken > $peerToken): Initiating to ${observation.device.address}")
                         gattClient.connect(observation.device)
                     }
+                } else {
+                    Log.v("MESH", "Arbitration LOST ($myToken < $peerToken): Waiting for ${observation.device.address}")
                 }
             }
         }
@@ -143,7 +174,7 @@ class MeshCoordinator(
         scope.launch {
             var maintenanceCounter = 0
             while (true) {
-                delay(5_000)
+                delay(1_000)
                 neighbors.refreshLiveness()
                 cleanupStaleNeighbors()
                 flushPendingMessages()
@@ -262,8 +293,11 @@ class MeshCoordinator(
                 repository.upsertKnownNeighbor(
                     nodeId = event.peerNodeId,
                     rssi = neighbors.rssiFor(event.device.address),
-                    state = "CONNECTED",
+                    state = "READY",
                     protocolVersion = 1,
+                    batteryPercentage = event.batteryPercentage,
+                    latitude = event.latitude,
+                    longitude = event.longitude
                 )
                 flushPendingMessages()
             }
@@ -271,11 +305,26 @@ class MeshCoordinator(
                 repository.upsertKnownNeighbor(
                     nodeId = event.peerNodeId,
                     rssi = neighbors.rssiFor(event.device.address),
-                    state = "CONNECTED",
+                    state = "READY",
                     protocolVersion = 1,
+                    batteryPercentage = event.batteryPercentage,
+                    latitude = event.latitude,
+                    longitude = event.longitude
                 )
+                
+                // Response with local state
+                val localLoc = locationProvider.getLastCachedLocation()
+                gattServer.acknowledgeHello(
+                    device = event.device,
+                    role = identityProvider.nodeRole,
+                    battery = batteryProvider.getBatteryLevel(),
+                    latitude = localLoc?.latitude,
+                    longitude = localLoc?.longitude
+                )
+                
                 flushPendingMessages()
             }
+            // ...
             is BleTransportEvent.MessageReceived -> {
                 val message = event.message
                 
@@ -288,10 +337,14 @@ class MeshCoordinator(
 
                 // Integrity Check: Verify signature
                 val isValid = if (message.signature.size() > 0 && message.publicKey.size() > 0) {
-                    val unsignedBytes = message.toBuilder().clearSignature().build().toByteArray()
+                    val signedMessage = message.toBuilder()
+                        .setTtl(message.ttl + message.hopCount)
+                        .setHopCount(0)
+                        .clearSignature()
+                        .build()
                     securityProvider.verify(
                         message.publicKey.toByteArray(),
-                        unsignedBytes,
+                        signedMessage.toByteArray(),
                         message.signature.toByteArray()
                     )
                 } else false
@@ -309,10 +362,15 @@ class MeshCoordinator(
                     is ReceiveResult.Accepted -> {
                         gattServer.acknowledgeMessagePersisted(event.device, message.messageId.toByteArray())
                         if (result.relayCopy.ttl > 0) {
-                            gattClient.sendMeshMessage(
+                            val clientForwards = gattClient.sendMeshMessage(
                                 message = result.relayCopy,
                                 excludePeerNodeId = event.sourcePeerNodeId,
                             )
+                            val serverForwards = gattServer.sendMeshMessage(
+                                message = result.relayCopy,
+                                excludePeerNodeId = event.sourcePeerNodeId,
+                            )
+                            Log.i("ROUTE", "Relayed message: client=$clientForwards server=$serverForwards")
                         }
                     }
                     ReceiveResult.Duplicate -> {
@@ -344,6 +402,12 @@ class MeshCoordinator(
                 }
             }
     }
+
+    private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
+        val results = FloatArray(1)
+        android.location.Location.distanceBetween(lat1, lon1, lat2, lon2, results)
+        return results[0]
+    }
 }
 
 data class MeshDiscoveryUiState(
@@ -363,13 +427,16 @@ data class MeshDiscoveryUiState(
 
 data class SosUiModel(
     val id: String,
+    val originNodeId: String,
     val text: String,
     val state: String,
     val ttl: Int,
     val hopCount: Int,
     val priority: Int,
+    val category: com.rescuemesh.app.protocol.EmergencyCategory,
     val latitude: Double?,
-    val longitude: Double?
+    val longitude: Double?,
+    val distanceMeters: Float? = null
 )
 
 data class NeighborUiModel(
@@ -382,7 +449,11 @@ data class NeighborUiModel(
     val peerNodeId: String?,
     val peerNodeIdBytes: ByteArray?,
     val lastPacketState: String?,
-    val role: com.rescuemesh.app.protocol.NodeRole? = null
+    val role: com.rescuemesh.app.protocol.NodeRole? = null,
+    val batteryPercentage: Int? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val distanceMeters: Float? = null
 )
 
 enum class NeighborLiveness {
@@ -455,18 +526,24 @@ private class MutableNeighborTable {
                 lastPacketState = "HELLO written",
             )
             is BleTransportEvent.HelloReceived -> previous.copyOrPlaceholder(key).copy(
-                connectionState = "HELLO_RECEIVED",
+                connectionState = "READY", // Handshake complete on their side
                 peerNodeId = event.peerNodeId.toDisplayNodeId(),
                 peerNodeIdBytes = event.peerNodeId,
                 lastPacketState = "HELLO received",
-                role = event.role
+                role = event.role,
+                batteryPercentage = event.batteryPercentage,
+                latitude = event.latitude,
+                longitude = event.longitude
             )
             is BleTransportEvent.AckReceived -> previous.copyOrPlaceholder(key).copy(
-                connectionState = "ACK_RECEIVED",
+                connectionState = "READY", // Handshake complete on our side
                 peerNodeId = event.peerNodeId.toDisplayNodeId(),
                 peerNodeIdBytes = event.peerNodeId,
-                lastPacketState = "ACK received",
-                role = event.role
+                lastPacketState = "Handshake ACK",
+                role = event.role,
+                batteryPercentage = event.batteryPercentage,
+                latitude = event.latitude,
+                longitude = event.longitude
             )
             is BleTransportEvent.Error -> previous.copyOrPlaceholder(key).copy(
                 connectionState = "ERROR",

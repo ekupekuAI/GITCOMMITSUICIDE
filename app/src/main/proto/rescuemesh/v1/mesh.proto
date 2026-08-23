@@ -39,6 +39,8 @@ message ControlMessage {
   bytes ack_message_id = 5;
   repeated string capabilities = 6;
   NodeRole role = 7;
+  uint32 battery_percentage = 8;
+  optional Location location = 9;
 }
 
 enum MessageType {

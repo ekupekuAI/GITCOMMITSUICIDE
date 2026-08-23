@@ -35,6 +35,7 @@ import com.rescuemesh.app.ble.GattClient
 import com.rescuemesh.app.ble.GattServer
 import com.rescuemesh.app.data.AppDatabase
 import com.rescuemesh.app.data.MessageRepository
+import com.rescuemesh.app.identity.BatteryProvider
 import com.rescuemesh.app.identity.LocationProvider
 import com.rescuemesh.app.identity.NodeIdentityProvider
 import com.rescuemesh.app.identity.SecurityProvider
@@ -80,7 +81,8 @@ private fun RescueMeshApp() {
             securityProvider = SecurityProvider(),
             locationProvider = LocationProvider(context),
             sensorProvider = SensorProvider(context),
-            advertiser = BleAdvertiser(context),
+            batteryProvider = BatteryProvider(context),
+            advertiser = BleAdvertiser(context, identityProvider.nodeId),
             scanner = BleScanner(context),
             gattServer = GattServer(context, identityProvider.nodeId, identityProvider),
             gattClient = GattClient(context, identityProvider.nodeId, identityProvider),

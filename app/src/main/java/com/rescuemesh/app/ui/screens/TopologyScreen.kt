@@ -21,7 +21,7 @@ fun TopologyScreen(localNodeId: String, neighbors: List<NeighborUiModel>) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF090B10))
+            .background(MaterialTheme.colorScheme.background)
             .padding(18.dp)
     ) {
         Text("Mesh Topology", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)

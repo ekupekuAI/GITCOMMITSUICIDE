@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 class BleAdvertiser(
     context: Context,
+    private val localNodeId: ByteArray,
 ) {
     private val appContext = context.applicationContext
     private val bluetoothManager = appContext.getSystemService(BluetoothManager::class.java)
@@ -62,9 +63,10 @@ class BleAdvertiser(
         }
 
         val settings = AdvertiseSettings.Builder()
-            .setAdvertiseMode(MeshConfig.getAdvertiseMode(powerMode))
-            .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
+            .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY) // High frequency
+            .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH) // Max range for emergency
             .setConnectable(true)
+            .setTimeout(0) // Run until stopped
             .build()
 
         val data = AdvertiseData.Builder()
@@ -72,9 +74,11 @@ class BleAdvertiser(
             .addServiceUuid(BleConstants.MeshServiceParcelUuid)
             .build()
 
+        val arbitrationToken = localNodeId.take(4).toByteArray()
+
         val scanResponse = AdvertiseData.Builder()
-            .setIncludeDeviceName(true)
-            .addManufacturerData(0xFFFF, byteArrayOf(0xDE.toByte(), 0xAD.toByte()))
+            .setIncludeDeviceName(false)
+            .addServiceData(BleConstants.MeshServiceParcelUuid, arbitrationToken)
             .build()
 
         val advertiseCallback = object : AdvertiseCallback() {

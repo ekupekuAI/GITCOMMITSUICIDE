@@ -53,7 +53,7 @@ fun HomeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF07090F))
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Innovative Background Glow
         Box(
@@ -144,7 +144,7 @@ private fun SectionLabel(text: String) {
         text, 
         style = MaterialTheme.typography.labelLarge, 
         fontWeight = FontWeight.Black,
-        color = Color.White.copy(alpha = 0.4f),
+        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
         modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
     )
 }
@@ -177,8 +177,8 @@ private fun QuickActions(context: android.content.Context) {
         },
         modifier = Modifier.fillMaxWidth().height(56.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
     ) {
         Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(12.dp))
@@ -208,7 +208,7 @@ private fun SosTriggerButton(onClick: () -> Unit) {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("TRIGGER SOS", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
-            Text("BROADCAST OFFLINE SIGNAL", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
+            Text("BROADCAST OFFLINE SIGNAL", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.85f))
         }
     }
 }
@@ -248,7 +248,7 @@ private fun HomeHeader(
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("LOCAL NODE IDENTIFIER", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontWeight = FontWeight.Bold)
-                Text(state.nodeId, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, color = Color.White)
+                Text(state.nodeId, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
             }
         }
     }
@@ -267,7 +267,7 @@ private fun MeshStatusCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("MESH ENGINE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black, color = Color.White)
+                Text("MESH ENGINE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
                 Text(
                     if (discoveryRequested) "Relaying packets to ${state.activeNeighborCount} peers" else "Network engine is currently suspended",
                     style = MaterialTheme.typography.bodySmall,
@@ -325,7 +325,7 @@ private fun RecentSosItem(text: String, state: String) {
         ) {
             Box(modifier = Modifier.size(10.dp).background(EmergencyRed, CircleShape))
             Column {
-                Text(text, maxLines = 1, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                Text(text, maxLines = 1, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                 Text(state, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
             }
         }

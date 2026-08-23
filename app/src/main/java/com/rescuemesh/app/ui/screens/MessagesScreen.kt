@@ -26,7 +26,7 @@ fun MessagesScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF090B10))
+            .background(MaterialTheme.colorScheme.background)
             .padding(18.dp)
     ) {
         Text("SOS Broadcasts", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -53,8 +53,6 @@ private fun SosItem(
     message: SosUiModel,
     localRole: com.rescuemesh.app.protocol.NodeRole
 ) {
-    val isAuthorized = localRole != com.rescuemesh.app.protocol.NodeRole.NODE_ROLE_PUBLIC_RELAY
-    
     val stateColor = when (message.state) {
         "PERSISTED", "QUEUED" -> EmergencyAmber
         "RELAYED" -> EmergencyTeal
@@ -81,16 +79,19 @@ private fun SosItem(
                 Text(message.id, fontWeight = FontWeight.Black, color = EmergencyRed)
                 Text(priorityLabel, color = priorityColor, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
             }
+
+            Text(
+                "FROM NODE: ${message.originNodeId}  |  ${message.category.name.replace("EMERGENCY_CATEGORY_", "").replace("_", " ")}",
+                color = EmergencyTeal,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+            )
             
-            val displayedText = if (isAuthorized) message.text else "CONTENT MASKED (RELAY ONLY)"
-            Text(displayedText, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(message.text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
             
             if (message.latitude != null && message.longitude != null) {
-                val displayedLoc = if (isAuthorized) {
-                    "LOCATION: ${"%.4f".format(message.latitude)}, ${"%.4f".format(message.longitude)}"
-                } else {
-                    "LOCATION MASKED (RELAY ONLY)"
-                }
+                val distLabel = message.distanceMeters?.let { " (%.0fm away)".format(it) } ?: ""
+                val displayedLoc = "LOCATION: ${"%.4f".format(message.latitude)}, ${"%.4f".format(message.longitude)}$distLabel"
                 Text(
                     displayedLoc,
                     color = EmergencyTeal,

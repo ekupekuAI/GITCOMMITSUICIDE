@@ -86,4 +86,8 @@ private class FakeMessageDao : MessageDao {
     override suspend fun pendingMessages(nowMs: Long, limit: Int): List<MessageEntity> = emptyList()
     override suspend fun updateMessageState(messageId: ByteArray, state: String) = Unit
     override suspend fun markForwarded(messageId: ByteArray, state: String, forwardedAtMs: Long) = Unit
+    override suspend fun deleteExpiredMessages(nowMs: Long) = Unit
+    override suspend fun deleteStaleNeighbors(thresholdMs: Long) = Unit
+    override suspend fun deleteOldReceipts(thresholdMs: Long) = Unit
+    override suspend fun deleteOldIncidents(thresholdMs: Long) = Unit
 }

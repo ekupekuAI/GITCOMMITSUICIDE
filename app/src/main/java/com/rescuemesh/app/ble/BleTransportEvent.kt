@@ -10,13 +10,19 @@ sealed interface BleTransportEvent {
     data class HelloReceived(
         val device: BluetoothDevice, 
         val peerNodeId: ByteArray,
-        val role: NodeRole
+        val role: NodeRole,
+        val batteryPercentage: Int,
+        val latitude: Double?,
+        val longitude: Double?
     ) : BleTransportEvent
     data class HelloSent(val device: BluetoothDevice) : BleTransportEvent
     data class AckReceived(
         val device: BluetoothDevice, 
         val peerNodeId: ByteArray,
-        val role: NodeRole
+        val role: NodeRole,
+        val batteryPercentage: Int,
+        val latitude: Double?,
+        val longitude: Double?
     ) : BleTransportEvent
     data class MessageReceived(
         val device: BluetoothDevice,

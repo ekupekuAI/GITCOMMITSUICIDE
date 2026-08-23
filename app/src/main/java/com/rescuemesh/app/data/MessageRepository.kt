@@ -29,6 +29,9 @@ class MessageRepository(
         rssi: Int,
         state: String,
         protocolVersion: Int,
+        batteryPercentage: Int? = null,
+        latitude: Double? = null,
+        longitude: Double? = null,
         nowMs: Long = System.currentTimeMillis(),
     ) {
         dao.upsertNeighbor(
@@ -41,6 +44,9 @@ class MessageRepository(
                 lastConnectedAtMs = nowMs,
                 connectSuccesses = if (state == "CONNECTED") 1 else 0,
                 connectFailures = if (state == "DISCONNECTED" || state == "ERROR") 1 else 0,
+                batteryPercentage = batteryPercentage,
+                latitude = latitude,
+                longitude = longitude
             ),
         )
     }
