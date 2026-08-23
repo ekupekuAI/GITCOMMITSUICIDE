@@ -3,12 +3,13 @@ package com.rescuemesh.app.mesh
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import java.util.concurrent.ConcurrentHashMap
 
 class PerformanceTracker {
     private val _stats = MutableStateFlow(PerformanceStats())
     val stats: StateFlow<PerformanceStats> = _stats
 
-    private val deliveryStartTimes = mutableMapOf<String, Long>()
+    private val deliveryStartTimes = ConcurrentHashMap<String, Long>()
 
     fun recordDiscovery() {
         _stats.update { it.copy(totalDiscoveries = it.totalDiscoveries + 1) }

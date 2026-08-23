@@ -39,4 +39,15 @@ class RelayPolicyTest {
 
         assertNull(RelayPolicy.acceptedRelayCopy(message, nowMs = 1_000))
     }
+
+    @Test
+    fun rejectsMessageAtMaximumHopCount() {
+        val message = MeshMessage.newBuilder()
+            .setTtl(1)
+            .setHopCount(MeshConfig.MAX_HOPS)
+            .setExpiresAtMs(2_000)
+            .build()
+
+        assertNull(RelayPolicy.acceptedRelayCopy(message, nowMs = 1_000))
+    }
 }

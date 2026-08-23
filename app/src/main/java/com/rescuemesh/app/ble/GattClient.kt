@@ -231,6 +231,23 @@ class GattClient(
         return started
     }
 
+    @SuppressLint("MissingPermission")
+    fun acknowledgeMessagePersisted(device: BluetoothDevice, messageId: ByteArray): Boolean {
+        if (!hasConnectPermission()) return false
+        val gatt = connections[device.address] ?: return false
+        val service = gatt.getService(BleConstants.MeshServiceUuid) ?: return false
+        val control = service.getCharacteristic(BleConstants.ControlCharacteristicUuid) ?: return false
+        control.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+        enqueueWrite(
+            gatt,
+            GattWriteOperation.Characteristic(
+                control,
+                ProtocolCodec.encodeControl(ProtocolCodec.ackMessage(localNodeId, messageId)),
+            ),
+        )
+        return true
+    }
+
     private fun isResponderFor(role: com.rescuemesh.app.protocol.NodeRole?, category: com.rescuemesh.app.protocol.EmergencyCategory): Boolean {
         if (role == null) return false
         if (role == com.rescuemesh.app.protocol.NodeRole.NODE_ROLE_COORDINATOR) return true

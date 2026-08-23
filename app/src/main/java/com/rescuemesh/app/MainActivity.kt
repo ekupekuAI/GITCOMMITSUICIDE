@@ -232,7 +232,12 @@ private fun RescueMeshApp() {
                 NeighborsScreen(uiState.neighbors)
             }
             composable(Screen.Messages.route) {
-                MessagesScreen(uiState.sosMessages, identityProvider.nodeRole)
+                MessagesScreen(
+                    messages = uiState.sosMessages,
+                    localRole = identityProvider.nodeRole,
+                    localNodeId = identityProvider.nodeId,
+                    onRespondToSos = { sos, status, text -> coordinator.respondToSos(sos, status, text) },
+                )
             }
             composable(Screen.Topology.route) {
                 TopologyScreen(uiState.nodeId, uiState.neighbors)

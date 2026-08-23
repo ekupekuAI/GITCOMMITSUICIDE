@@ -61,7 +61,7 @@ class MessageRepository(
 
     suspend fun persistCreatedMessage(message: MeshMessage, nowMs: Long = System.currentTimeMillis()): Boolean {
         val entity = message.toEntity(
-            state = "PERSISTED",
+            state = "CREATED",
             receivedAtMs = nowMs,
             previousHopNodeId = null
         )
@@ -76,6 +76,10 @@ class MessageRepository(
             Log.i("ROOM", "Created message persisted")
         }
         return inserted
+    }
+
+    suspend fun updateMessageState(messageId: ByteArray, state: String) {
+        dao.updateMessageState(messageId, state)
     }
 
     suspend fun persistReceivedMessage(

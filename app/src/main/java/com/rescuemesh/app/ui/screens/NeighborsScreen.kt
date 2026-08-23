@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.os.SystemClock
 import com.rescuemesh.app.mesh.NeighborLiveness
 import com.rescuemesh.app.mesh.NeighborUiModel
 import com.rescuemesh.app.ui.components.GlassPanel
@@ -88,6 +89,21 @@ private fun NeighborItem(neighbor: NeighborUiModel) {
                 Text(neighbor.peerNodeId ?: "Connecting...", fontWeight = FontWeight.Bold)
                 Text(neighbor.connectionState, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                 Text("RSSI: ${neighbor.rssi} dBm", style = MaterialTheme.typography.bodySmall, color = EmergencyAmber)
+                Text(
+                    "LAST SEEN: ${SystemClock.elapsedRealtime() - neighbor.lastSeenElapsedMs} ms ago",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                )
+                neighbor.distanceMeters?.let { distance ->
+                    Text("DISTANCE: %.0f m".format(distance), style = MaterialTheme.typography.bodySmall, color = EmergencyTeal)
+                }
+                if (neighbor.latitude != null && neighbor.longitude != null) {
+                    Text(
+                        "LOCATION: %.5f, %.5f".format(neighbor.latitude, neighbor.longitude),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = EmergencyTeal,
+                    )
+                }
             }
 
             Column(horizontalAlignment = Alignment.End) {

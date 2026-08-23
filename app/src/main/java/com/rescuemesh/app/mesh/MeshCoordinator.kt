@@ -99,11 +99,23 @@ class MeshCoordinator(
                     calculateDistance(localLoc.latitude, localLoc.longitude, message.latitude, message.longitude)
                 } else null
 
+                val response = EmergencyResponseFactory.parse(message.toProto())
+                val responseForSos = if (message.type == com.rescuemesh.app.protocol.MessageType.MESSAGE_TYPE_SOS.number) {
+                    messages.asSequence()
+                        .map { EmergencyResponseFactory.parse(it.toProto()) }
+                        .filterNotNull()
+                        .firstOrNull { it.sosMessageIdHex == message.messageId.toHex() }
+                } else null
+
                 SosUiModel(
                     id = message.messageId.toDisplayNodeId(),
+                    messageIdBytes = message.messageId,
                     originNodeId = message.originNodeId.toDisplayNodeId(),
-                    text = message.payload.decodeToString(),
+                    originNodeIdBytes = message.originNodeId,
+                    text = response?.message ?: message.payload.decodeToString(),
                     state = message.state,
+                    responseStatus = responseForSos?.status?.name ?: response?.status?.name,
+                    responseText = responseForSos?.message ?: response?.message,
                     ttl = message.ttl,
                     hopCount = message.hopCount,
                     priority = message.priority,
@@ -215,6 +227,10 @@ class MeshCoordinator(
         gattServer.start()
         advertiser.start(_powerMode.value)
         scanner.start(_powerMode.value)
+        scope.launch {
+            val location = locationProvider.getCurrentLocation()
+            identityProvider.updateState(location, batteryProvider.getBatteryLevel())
+        }
     }
 
     fun stopDiscovery() {
@@ -261,6 +277,7 @@ class MeshCoordinator(
         scope.launch {
             val location = locationProvider.getCurrentLocation()
             val impact = sensorProvider.impactDetected.value
+            identityProvider.updateState(location, batteryProvider.getBatteryLevel())
             val message = SosFactory.create(
                 originNodeId = identityProvider.nodeId,
                 text = text,
@@ -274,9 +291,39 @@ class MeshCoordinator(
             performanceTracker.trackMessageStart(message.messageId.toByteArray().toHex())
             val inserted = repository.persistCreatedMessage(message)
             if (inserted) {
+                repository.updateMessageState(message.messageId.toByteArray(), "QUEUED")
                 val clientForwards = gattClient.sendMeshMessage(message)
                 val serverForwards = gattServer.sendMeshMessage(message)
+                if (clientForwards + serverForwards > 0) {
+                    repository.updateMessageState(message.messageId.toByteArray(), "RELAYING")
+                }
                 Log.i("ROUTE", "Initial route selected for SOS: client=$clientForwards server=$serverForwards")
+            }
+        }
+    }
+
+    fun respondToSos(
+        sos: SosUiModel,
+        status: ResponderStatus,
+        responseText: String,
+    ) {
+        scope.launch {
+            val response = EmergencyResponseFactory.create(
+                responderNodeId = identityProvider.nodeId,
+                victimNodeId = sos.originNodeIdBytes,
+                sosMessageId = sos.messageIdBytes,
+                status = status,
+                responseText = responseText,
+                role = identityProvider.nodeRole,
+                securityProvider = securityProvider,
+            )
+            if (repository.persistCreatedMessage(response)) {
+                repository.updateMessageState(response.messageId.toByteArray(), "QUEUED")
+                val clientForwards = gattClient.sendMeshMessage(response)
+                val serverForwards = gattServer.sendMeshMessage(response)
+                if (clientForwards + serverForwards > 0) {
+                    repository.updateMessageState(response.messageId.toByteArray(), "RELAYING")
+                }
             }
         }
     }
@@ -370,7 +417,13 @@ class MeshCoordinator(
                 when (result) {
                     is ReceiveResult.Accepted -> {
                         gattServer.acknowledgeMessagePersisted(event.device, message.messageId.toByteArray())
-                        if (result.relayCopy.ttl > 0) {
+                        gattClient.acknowledgeMessagePersisted(event.device, message.messageId.toByteArray())
+                        val isDestination = message.destinationId.toByteArray().contentEquals(identityProvider.nodeId)
+                        repository.updateMessageState(
+                            message.messageId.toByteArray(),
+                            if (isDestination) "DELIVERED" else "QUEUED",
+                        )
+                        if (result.relayCopy.ttl > 0 && !isDestination) {
                             val clientForwards = gattClient.sendMeshMessage(
                                 message = result.relayCopy,
                                 excludePeerNodeId = event.sourcePeerNodeId,
@@ -380,11 +433,15 @@ class MeshCoordinator(
                                 excludePeerNodeId = event.sourcePeerNodeId,
                             )
                             Log.i("ROUTE", "Relayed message: client=$clientForwards server=$serverForwards")
+                            if (clientForwards + serverForwards > 0) {
+                                repository.updateMessageState(message.messageId.toByteArray(), "RELAYING")
+                            }
                         }
                     }
                     ReceiveResult.Duplicate -> {
                         performanceTracker.recordDuplicateRejected()
                         gattServer.acknowledgeMessagePersisted(event.device, message.messageId.toByteArray())
+                        gattClient.acknowledgeMessagePersisted(event.device, message.messageId.toByteArray())
                     }
                     else -> Unit
                 }
@@ -404,14 +461,17 @@ class MeshCoordinator(
             .forEach { entity ->
                 if (ForwardingPolicy.isForwardable(entity, nowMs)) {
                     val message = entity.toProto()
-                    gattClient.sendMeshMessage(
+                    val clientForwards = gattClient.sendMeshMessage(
                         message = message,
                         excludePeerNodeId = entity.previousHopNodeId
                     )
-                    gattServer.sendMeshMessage(
+                    val serverForwards = gattServer.sendMeshMessage(
                         message = message,
                         excludePeerNodeId = entity.previousHopNodeId
                     )
+                    if (clientForwards + serverForwards > 0) {
+                        repository.updateMessageState(message.messageId.toByteArray(), "RELAYING")
+                    }
                 }
             }
     }
@@ -440,9 +500,13 @@ data class MeshDiscoveryUiState(
 
 data class SosUiModel(
     val id: String,
+    val messageIdBytes: ByteArray,
     val originNodeId: String,
+    val originNodeIdBytes: ByteArray,
     val text: String,
     val state: String,
+    val responseStatus: String? = null,
+    val responseText: String? = null,
     val ttl: Int,
     val hopCount: Int,
     val priority: Int,
@@ -450,7 +514,16 @@ data class SosUiModel(
     val latitude: Double?,
     val longitude: Double?,
     val distanceMeters: Float? = null
-)
+) {
+    val lifecycleStatus: String
+        get() = responseStatus ?: when (state) {
+            "CREATED" -> "CREATED"
+            "QUEUED" -> "QUEUED"
+            "RELAYING" -> "RELAYING"
+            "DELIVERED" -> "DELIVERED"
+            else -> state
+        }
+}
 
 data class NeighborUiModel(
     val sessionId: String,
