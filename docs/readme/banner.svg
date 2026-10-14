@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 340" width="1200" height="340" role="img" aria-labelledby="t d">
+  <title id="t">RescueMesh</title>
+  <desc id="d">An SOS signal hops phone to phone across a Bluetooth mesh until it reaches a responder.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0A0D14"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <radialGradient id="glowRed" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#EF4444" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#EF4444" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowTeal" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#10B981" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#10B981" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#F87171"/>
+      <stop offset="0.5" stop-color="#E5E7EB"/>
+      <stop offset="1" stop-color="#34D399"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#1E293B" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <style>
+    .glow-a { animation: drift-a 9s ease-in-out infinite alternate; }
+    .glow-b { animation: drift-b 11s ease-in-out infinite alternate; }
+    .link { stroke: #334155; stroke-width: 2; }
+    .route { stroke: #EF4444; stroke-width: 2; stroke-dasharray: 6 8; opacity: .55; animation: dash 1.6s linear infinite; }
+    .node { fill: #111827; stroke: #94A3B8; stroke-width: 2.5; }
+    .ring { fill: none; stroke-width: 2; transform-box: fill-box; transform-origin: center; animation: ping 2.4s ease-out infinite; }
+    .ring.red { stroke: #EF4444; }
+    .ring.teal { stroke: #10B981; animation-delay: 1.9s; }
+    .ring.slate { stroke: #38BDF8; animation-duration: 3.2s; }
+    .r2 { animation-delay: .5s; } .r3 { animation-delay: 1.1s; } .r4 { animation-delay: 1.6s; }
+    .packet { fill: #FCA5A5; animation: hop 4.8s cubic-bezier(.6,0,.4,1) infinite; }
+    .packet.late { animation-delay: 2.4s; }
+    .tag { font: 600 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #94A3B8; letter-spacing: 1px; }
+    .h1 { font: 800 76px -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; letter-spacing: -1px; }
+    .sub { font: 500 22px -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #CBD5E1; }
+    .chip { font: 600 13px -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #94A3B8; }
+
+    @keyframes drift-a { from { transform: translate(0, 0); } to { transform: translate(60px, 20px); } }
+    @keyframes drift-b { from { transform: translate(0, 0); } to { transform: translate(-50px, -15px); } }
+    @keyframes dash { to { stroke-dashoffset: -28; } }
+    @keyframes ping { 0% { transform: scale(1); opacity: .9; } 100% { transform: scale(2.6); opacity: 0; } }
+    /* SOS (720,230) → relay (820,130) → relay (930,240) → responder (1110,230) */
+    @keyframes hop {
+      0%   { transform: translate(0, 0); opacity: 0; }
+      5%   { opacity: 1; }
+      25%  { transform: translate(100px, -100px); }
+      50%  { transform: translate(210px, 10px); }
+      75%  { transform: translate(390px, 0); opacity: 1; }
+      85%, 100% { transform: translate(390px, 0); opacity: 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; }
+      .packet { opacity: 0; }
+    }
+  </style>
+
+  <rect width="1200" height="340" fill="url(#bg)"/>
+  <rect width="1200" height="340" fill="url(#grid)" opacity=".5"/>
+  <ellipse class="glow-a" cx="720" cy="230" rx="260" ry="180" fill="url(#glowRed)"/>
+  <ellipse class="glow-b" cx="1080" cy="160" rx="260" ry="180" fill="url(#glowTeal)"/>
+
+  <!-- Left: title block -->
+  <text x="64" y="92" class="tag">OFFLINE · BLUETOOTH LE · STORE-AND-FORWARD</text>
+  <text x="60" y="170" class="h1" fill="url(#title)">RescueMesh</text>
+  <text x="64" y="212" class="sub">SOS that hops phone-to-phone when the towers are down.</text>
+  <g transform="translate(64 244)">
+    <rect width="132" height="30" rx="15" fill="#EF4444" fill-opacity=".12" stroke="#EF4444" stroke-opacity=".5"/>
+    <text x="66" y="20" text-anchor="middle" class="chip" style="fill:#FCA5A5">Signed SOS</text>
+    <rect x="144" width="148" height="30" rx="15" fill="#10B981" fill-opacity=".12" stroke="#10B981" stroke-opacity=".5"/>
+    <text x="218" y="20" text-anchor="middle" class="chip">Responder roles</text>
+    <rect x="304" width="120" height="30" rx="15" fill="#38BDF8" fill-opacity=".12" stroke="#38BDF8" stroke-opacity=".5"/>
+    <text x="364" y="20" text-anchor="middle" class="chip">No SIM / Wi-Fi</text>
+  </g>
+
+  <!-- Right: mesh -->
+  <g>
+    <line class="link" x1="720" y1="230" x2="840" y2="300"/>
+    <line class="link" x1="840" y1="300" x2="930" y2="240"/>
+    <line class="link" x1="820" y1="130" x2="1040" y2="110"/>
+    <line class="link" x1="930" y1="240" x2="1040" y2="110"/>
+    <line class="link" x1="1040" y1="110" x2="1110" y2="230"/>
+    <line class="link" x1="1040" y1="110" x2="1150" y2="60"/>
+    <polyline class="route" fill="none" points="720,230 820,130 930,240 1110,230"/>
+
+    <circle class="ring red" cx="720" cy="230" r="16"/>
+    <circle class="ring slate r2" cx="820" cy="130" r="11"/>
+    <circle class="ring slate r3" cx="930" cy="240" r="11"/>
+    <circle class="ring slate r4" cx="1040" cy="110" r="11"/>
+    <circle class="ring teal" cx="1110" cy="230" r="16"/>
+
+    <circle class="node" cx="840" cy="300" r="8"/>
+    <circle class="node" cx="1150" cy="60" r="8"/>
+    <circle class="node" cx="820" cy="130" r="11"/>
+    <circle class="node" cx="930" cy="240" r="11"/>
+    <circle class="node" cx="1040" cy="110" r="11"/>
+    <circle cx="720" cy="230" r="16" fill="#EF4444"/>
+    <circle cx="1110" cy="230" r="16" fill="#10B981"/>
+
+    <circle class="packet" cx="720" cy="230" r="6"/>
+    <circle class="packet late" cx="720" cy="230" r="6"/>
+
+    <text x="720" y="270" text-anchor="middle" class="tag" style="fill:#FCA5A5">SOS</text>
+    <text x="1110" y="270" text-anchor="middle" class="tag">RESPONDER</text>
+  </g>
+</svg>

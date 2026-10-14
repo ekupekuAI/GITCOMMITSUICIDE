@@ -1,61 +1,147 @@
-# RescueMesh
+<p align="center"><img src="docs/readme/banner.svg" width="100%" alt="RescueMesh — SOS that hops phone-to-phone when the towers are down"></p>
 
-RescueMesh is a decentralized emergency communication platform for Android that operates entirely without cellular or Wi-Fi infrastructure. It uses Bluetooth Low Energy (BLE) to create a self-healing mesh network, allowing people in disaster zones to broadcast SOS signals, share their location, and coordinate with responders.
+<p align="center">
+  <img src="https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin 2.0.21">
+  <img src="https://img.shields.io/badge/Android-BLE%20mesh-3DDC84?logo=android&logoColor=white" alt="Android BLE mesh">
+  <img src="https://img.shields.io/badge/minSdk-26-0A0D14" alt="minSdk 26">
+  <img src="https://img.shields.io/badge/targetSdk-35-0A0D14" alt="targetSdk 35">
+  <img src="https://img.shields.io/badge/UI-Jetpack%20Compose%20%C2%B7%20Material%203-4285F4?logo=jetpackcompose&logoColor=white" alt="Jetpack Compose, Material 3">
+</p>
 
-## Problem
-In many natural disasters, infrastructure like cell towers and power grids are the first to fail. Without connectivity, victims cannot signal for help, and responders lose the ability to coordinate efforts effectively.
+<p align="center">
+  <img src="https://skillicons.dev/icons?i=kotlin,androidstudio,gradle,sqlite" alt="Kotlin, Android Studio, Gradle, SQLite">
+</p>
 
-## Solution
-RescueMesh turns every smartphone into a network node. Even without a SIM card or internet access, devices can discover each other, establish secure links, and relay emergency messages across multiple hops until they reach an authorized responder or a gateway with connectivity.
+<p align="center"><i>Built in 24 hours at the SNIST hackathon.</i></p>
 
-## How it Works
-RescueMesh implements an opportunistic store-and-forward mesh over BLE. Each device runs both a GATT server and a GATT client. When two devices discover each other, they perform a deterministic handshake to exchange node identities and capabilities. If a device has an SOS message in its local database, it attempts to relay it to neighbors based on their proximity and role (e.g., prioritizing medical responders).
+---
 
-## Key Capabilities
-- **Infrastructure-Independent Mesh**: Real peer-to-peer relaying verified on physical hardware.
-- **Store-and-Forward Routing**: Messages survive intermittent connectivity by persisting in a local Room database.
-- **Verified Authenticity**: All emergency signals are digitally signed using the Android KeyStore (ECC SHA256) to prevent tampering.
-- **Responder Roles**: Capability-aware routing that identifies and prioritizes nodes with specific skills (Medical, Fire, etc.).
-- **Incident Aggregation**: Automatically clusters nearby similar reports into a single event to reduce network flood.
-- **Self-Cleaning Storage**: Automatically purges expired messages, stale neighbor logs, and internal app cache on startup and shutdown.
-- **Device Location**: Attaches real GPS coordinates to SOS messages when available (using FusedLocationProvider).
-- **Hybrid Call Path**: One-touch dialing for local emergency services (112 in India) when cellular signal is present.
+## What it is
 
-## Technology Stack
-- **Language**: Kotlin
-- **UI**: Jetpack Compose (Material 3)
-- **Database**: Room (SQLite)
-- **Serialization**: Protocol Buffers (v3)
-- **Networking**: Android Bluetooth LE (GATT)
-- **Security**: Android KeyStore (ECC SHA256)
+When a flood or earthquake takes out cell towers and power, the people who need help are often the ones who can't call for it. **RescueMesh turns every Android phone into a relay.** Phones discover each other over Bluetooth Low Energy, open GATT links, and pass a signed SOS from one phone to the next until it reaches someone who can respond. It needs no SIM card, Wi-Fi or server.
 
-## Project Structure
-- `ble/`: Low-level BLE management (Advertiser, Scanner, GATT Client/Server).
-- `mesh/`: Mesh logic, including connection arbitration and forwarding policies.
-- `data/`: Persistence layer (Room entities, DAOs, and repositories).
-- `protocol/`: Wire-format definitions and Protocol Buffer integration.
-- `identity/`: Node identity, security key management, and location providers.
-- `ui/`: Dashboard, SOS, and Topology visualization components.
+Each SOS is stored on the phone that carries it, so a message survives gaps in coverage. It travels on whenever that phone meets a new neighbour (*store-and-forward*).
 
-## Setup and Build
-To build the project, you need Android Studio Ladybug or newer and the Android SDK (API 35).
+## Features
 
-1. Clone the repository.
-2. Open the project in Android Studio.
-3. Sync Gradle and build the `:app` module.
-4. Deploy `RescueMesh_v2.0_Final_Hardened.apk` to an Android device (API 26+).
+| | Feature | How it works in the code |
+|---|---|---|
+| 📡 | **Infrastructure-free discovery** | Every node advertises a RescueMesh service UUID and scans for it (`BleAdvertiser`, `BleScanner`). |
+| 🔗 | **Dual-role GATT links** | Each phone runs a GATT server *and* client. A deterministic "higher token initiates" rule stops two phones opening duplicate links (`MeshCoordinator`). |
+| 🤝 | **Handshake with context** | HELLO / ACK control frames exchange node ID, role, battery level and last known location. |
+| 🆘 | **Categorised SOS** | Medical, Fire, Security, Trapped, Flood or Other, with Low → Critical severity and up to 220 bytes of text. |
+| 🔏 | **Signed messages** | Every SOS and every responder reply is signed with an EC key held in the Android Keystore (`SHA256withECDSA`). Receivers verify before storing or relaying. |
+| 🔁 | **Store-and-forward relay** | Messages persist in Room and are re-sent to new neighbours. Limits: TTL 8, max 10 hops, fan-out of 2 per send, duplicate and replay rejection. |
+| 🚑 | **Responder roles** | Unlock Medical, Fire, Search & Rescue, Coordinator and other roles (prototype auth code). SOS messages are routed to matching responders first, and responders can reply *Acknowledged* or *Responding*. |
+| 🗺️ | **Location & distance** | Attaches GPS from the Fused Location Provider when available and shows distance to each SOS and neighbour. |
+| 🧩 | **Incident aggregation** | Reports of the same category within about 100 m are merged into one incident. |
+| 💥 | **Impact detection** | A sharp accelerometer spike tags the next SOS with `[IMPACT DETECTED]`. |
+| 🕸️ | **Live topology** | A rotatable 3D canvas view of the node and its active links. |
+| 📊 | **Diagnostics & power modes** | Discoveries, connection success rate, delivery latency and duplicates. Low / Normal / Urgent modes change scan and advertise intensity. |
+| 📞 | **Hybrid call path** | One tap opens the dialer with **112** when there is still a cellular signal. |
+| 🧹 | **Self-cleaning storage** | Expired messages, stale neighbours, old receipts and cache are purged automatically. |
 
-## Physical Device Testing
-RescueMesh requires physical hardware to verify BLE performance. Testing should be done with 3 or more devices in an environment with Wi-Fi and Mobile Data disabled.
-1. Start the **Mesh Engine** on all devices.
-2. Verify they appear in the **Nearby** list and **Topology** view.
-3. Trigger an SOS on one device and confirm its delivery on other nodes.
+> A short workflow recording is included in the repo: [`rescuemesh_workflow.mp4`](rescuemesh_workflow.mp4).
 
-## Security Approach
-RescueMesh uses hardware-backed ECC keys to sign every SOS message at the source. Relaying nodes verify these signatures before forwarding to ensure data integrity. Replay protection is enforced via a persistent message receipt index and a 1-hour temporal window.
+## How a message travels
 
-## Limitations
-- **BLE Range**: Typical range is 20-50 meters in open space; significantly less indoors.
-- **GATT Slots**: Android devices are hardware-limited to a few concurrent BLE connections (usually 4-7).
-- **Foreground Usage**: For reliable mesh participation, the app should remain in the foreground with the screen on.
-- **Prototype Auth**: In this version, responder roles are verified using a prototype code (RESCUE112).
+```mermaid
+sequenceDiagram
+    autonumber
+    participant V as 🆘 Victim phone
+    participant R as 📱 Relay phone
+    participant H as 🚑 Responder phone
+
+    Note over V,R: Both advertise + scan the RescueMesh service UUID
+    V->>R: GATT connect (higher arbitration token initiates)
+    V->>R: CONTROL · HELLO (node ID, role, battery, location)
+    R-->>V: CONTROL · ACK (node ID, role, battery, location)
+
+    Note over V: SOS created → signed in Keystore → saved to Room
+    V->>R: DATA · signed SOS (TTL 8, hop 0)
+    Note over R: verify signature · reject duplicate / replay<br/>save copy with TTL−1, hop+1
+    R-->>V: CONTROL · ACK(messageId) → victim marks RELAYED
+
+    Note over R,H: Later — relay meets a responder (store-and-forward)
+    R->>H: DATA · SOS (responders for the category are tried first)
+    H-->>R: CONTROL · ACK(messageId)
+    H->>R: DATA · signed response "RESPONDING"
+    R->>V: …relayed back toward the victim
+```
+
+Wire format: a 4-byte frame header (version, type, length) followed by a Protocol Buffers message of at most 500 bytes. See [`docs/PROTOCOL.md`](docs/PROTOCOL.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## Build & run
+
+**Requirements**
+- Android Studio (recent), Android SDK **35**
+- **JDK 25.** The Kotlin toolchain is pinned to 25, and Gradle's Foojay resolver can download it for you.
+- Two or more **physical** Android 8.0+ phones. BLE advertising and GATT don't work meaningfully on the emulator.
+
+```bash
+git clone https://github.com/ekupekuAI/GITCOMMITSUICIDE.git
+cd GITCOMMITSUICIDE
+./gradlew assembleDebug
+```
+
+The APK is written to `app/build/outputs/apk/debug/app-debug.apk`. Install it on each phone, grant the Bluetooth and Location permissions, and turn on the **Mesh Engine** switch on the home screen.
+
+Run the unit tests (protocol codec, relay and forwarding policies, repository, responder replies):
+
+```bash
+./gradlew testDebugUnitTest
+```
+
+The `.apk` files in the repo root are earlier hackathon snapshots. They predate the fixes listed below, so build from source for the current version. [`docs/DEVICE_TESTING.md`](docs/DEVICE_TESTING.md) has a multi-phone test script.
+
+## Required keys
+
+| Key | Needed? | Notes |
+|---|---|---|
+| API keys / `google-services.json` | **None** | The app is fully offline and talks to no backend. |
+| Google Play services | Optional | Used only for GPS via the Fused Location Provider. Without it, SOS messages are sent without coordinates. |
+| Responder auth code | Built in | Responder roles are unlocked with the prototype code `RESCUE112`. This is a demo gate, not a secret. A production version would need coordinator-signed certificates. |
+
+<details>
+<summary><b>Project structure</b></summary>
+
+```
+app/src/main/java/com/rescuemesh/app/
+├── MainActivity.kt          # Compose nav host + bottom bar, permission flow
+├── ble/                     # BleAdvertiser, BleScanner, GattClient, GattServer, transport events
+├── mesh/                    # MeshCoordinator, Relay/Forwarding policies, SOS + response factories, config, perf tracker
+├── data/                    # Room database, entities, DAO, MessageRepository
+├── protocol/                # Wire frame codec + protobuf helpers
+├── identity/                # Node ID, Keystore signing, location, battery, accelerometer
+└── ui/                      # Home, SOS, Nearby, Messages, Topology, Debug, Settings + theme
+app/src/main/proto/rescuemesh/v1/mesh.proto   # MeshMessage / ControlMessage schema
+app/src/test/                                 # JVM unit tests
+docs/                                         # Architecture, protocol, testing guides
+```
+</details>
+
+## What's new in this version
+
+| Before | After |
+|---|---|
+| A long SOS, non-English text, or an SOS sent after an impact was detected could **crash the app** (payload size check threw an exception). | Text is trimmed to fit the 220-byte budget. Sending never crashes. |
+| A responder reply longer than about 165 characters overflowed the 500-byte BLE frame and **crashed** on send. | Replies are sized to fit the frame. |
+| An SOS with GPS that was queued or relayed later was **rejected by every receiver**: the location timestamp wasn't stored, so the rebuilt message no longer matched its signature. | Signed content now round-trips through the database exactly. Multi-hop delivery with location works. |
+| Delivery ACKs sent *to* a GATT server were ignored, so messages pushed over notifications never showed as delivered. | The server handles message ACKs. Delivery is confirmed in both directions. |
+| GATT callbacks (binder threads) and the UI thread shared plain collections, which could cause random `ConcurrentModificationException` crashes. | Thread-safe collections, plus a guard for a failed `connectGatt`. |
+| The connection success rate was calculated from the wrong counter. | Correct success-rate metric. |
+| Power modes were selectable but did nothing, and the Debug screen was unreachable. | Low / Normal / Urgent now drive scan and advertise modes, and **Debug** is in the bottom bar. |
+| The *Call 112* button crashed on devices without a dialer. | Shows a message instead. |
+
+## Future development
+
+- **Re-offer messages to new neighbours.** Once a message has been sent to any peer it is marked as relaying, so phones that appear later never receive it.
+- **Run the mesh in a foreground service.** The engine lives inside the activity, so it stops when the screen rotates or the activity is destroyed, and Android may throttle it in the background.
+- **Keep received messages after their last hop.** Maintenance deletes messages whose TTL reaches 0, which also removes them from the final receiver's list.
+- **Replace the prototype responder code** with coordinator-signed credentials.
+- Move mesh work off the main thread and add instrumented BLE tests on real devices.
+- Publish signed release APKs through GitHub Releases instead of committing APKs to the repo.
+
+---
+
+<p align="center"><sub>More background in <a href="ABOUT.md">ABOUT.md</a> · Built at the SNIST 24-hour hackathon</sub></p>
