@@ -30,8 +30,12 @@ object EmergencyResponseFactory {
         securityProvider: SecurityProvider,
         nowMs: Long = System.currentTimeMillis(),
     ): MeshMessage {
-        val details = responseText.trim().take(220)
-        val encodedPayload = "RESPONSE|${status.name}|${sosMessageId.toHexKey()}|$details"
+        // Keep the whole payload (header + details) within the same budget as SOS text;
+        // a 220-char response previously overflowed the 500-byte wire frame and crashed.
+        val header = "RESPONSE|${status.name}|${sosMessageId.toHexKey()}|"
+        val details = responseText.trim()
+            .truncateUtf8(MAX_PAYLOAD_TEXT_BYTES - header.encodeToByteArray().size)
+        val encodedPayload = header + details
         val builder = MeshMessage.newBuilder()
             .setMessageId(ByteString.copyFrom(randomId()))
             .setOriginNodeId(ByteString.copyFrom(responderNodeId))

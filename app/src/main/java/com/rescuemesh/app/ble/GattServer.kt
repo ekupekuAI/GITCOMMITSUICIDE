@@ -25,6 +25,8 @@ import com.rescuemesh.app.protocol.ProtocolCodec
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedDeque
 
 class GattServer(
     context: Context,
@@ -33,12 +35,14 @@ class GattServer(
 ) {
     private val appContext = context.applicationContext
     private val bluetoothManager = appContext.getSystemService(BluetoothManager::class.java)
-    private val subscribedDevices = linkedSetOf<BluetoothDevice>()
-    private val peerNodeIdsByAddress = mutableMapOf<String, ByteArray>()
-    
+    // Concurrent collections: GATT callbacks arrive on binder threads while the
+    // coordinator iterates these from the main thread.
+    private val subscribedDevices: MutableSet<BluetoothDevice> = ConcurrentHashMap.newKeySet()
+    private val peerNodeIdsByAddress = ConcurrentHashMap<String, ByteArray>()
+
     // Per-device notification queue
-    private val notificationQueues = mutableMapOf<String, ArrayDeque<ByteArray>>()
-    private val isNotifying = mutableMapOf<String, Boolean>()
+    private val notificationQueues = ConcurrentHashMap<String, ConcurrentLinkedDeque<ByteArray>>()
+    private val isNotifying = ConcurrentHashMap<String, Boolean>()
 
     private var server: BluetoothGattServer? = null
     private var dataTxCharacteristic: BluetoothGattCharacteristic? = null
@@ -134,7 +138,7 @@ class GattServer(
     @SuppressLint("MissingPermission")
     private fun notifyData(device: BluetoothDevice, bytes: ByteArray) {
         val address = device.address
-        val queue = notificationQueues.getOrPut(address) { ArrayDeque() }
+        val queue = notificationQueues.getOrPut(address) { ConcurrentLinkedDeque() }
         queue.addLast(bytes)
         processNextNotification(device)
     }
@@ -147,9 +151,7 @@ class GattServer(
         val activeServer = server ?: return
         val characteristic = dataTxCharacteristic ?: return
         val queue = notificationQueues[address] ?: return
-        if (queue.isEmpty()) return
-        
-        val next = queue.removeFirst()
+        val next = queue.pollFirst() ?: return
         isNotifying[address] = true
         
         val ok = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -294,6 +296,10 @@ class GattServer(
                     
                     Log.d("GATT_SERVER", "Sending HELLO ACK to ${device.address}")
                     // notifyControl will be triggered by MeshCoordinator after gathering local state
+                } else if (message.type == ControlType.CONTROL_TYPE_ACK && !message.ackMessageId.isEmpty) {
+                    // The client confirms messages we pushed via notification; without this the
+                    // server-side sender never learned the message was delivered.
+                    _events.tryEmit(BleTransportEvent.MessageAckReceived(device, message.ackMessageId.toByteArray()))
                 }
             }
         // ...

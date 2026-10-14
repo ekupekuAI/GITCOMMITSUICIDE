@@ -176,7 +176,12 @@ private fun QuickActions(context: android.content.Context) {
             val intent = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
                 data = android.net.Uri.parse("tel:112")
             }
-            context.startActivity(intent)
+            // Devices without a dialer (tablets, some rugged units) have no ACTION_DIAL handler.
+            try {
+                context.startActivity(intent)
+            } catch (e: android.content.ActivityNotFoundException) {
+                android.widget.Toast.makeText(context, "No dialer available on this device", android.widget.Toast.LENGTH_SHORT).show()
+            }
         },
         modifier = Modifier.fillMaxWidth().height(56.dp),
         shape = RoundedCornerShape(16.dp),

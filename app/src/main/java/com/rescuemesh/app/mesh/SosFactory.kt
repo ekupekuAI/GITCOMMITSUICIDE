@@ -24,9 +24,11 @@ object SosFactory {
         priority: Int = 0,
         nowMs: Long = System.currentTimeMillis(),
     ): MeshMessage {
-        val finalDetails = if (impactDetected) "[IMPACT DETECTED] $text" else text
-        require(finalDetails.isNotBlank()) { "SOS text cannot be blank" }
-        require(finalDetails.encodeToByteArray().size <= 220) { "SOS text is too large" }
+        require(text.isNotBlank()) { "SOS text cannot be blank" }
+        // Truncate instead of throwing: the UI caps characters, not UTF-8 bytes, and the
+        // impact prefix adds more. The whole frame must stay under WireFrameCodec.MAX_PAYLOAD_BYTES.
+        val finalDetails = (if (impactDetected) "[IMPACT DETECTED] $text" else text)
+            .truncateUtf8(MAX_PAYLOAD_TEXT_BYTES)
 
         val builder = MeshMessage.newBuilder()
             .setMessageId(ByteString.copyFrom(randomId()))
@@ -48,7 +50,8 @@ object SosFactory {
             builder.location = Location.newBuilder()
                 .setLatitude(location.latitude)
                 .setLongitude(location.longitude)
-                .setTimestampMs(location.time)
+                // No timestamp: Room doesn't store it, so a queued/relayed copy rebuilt via
+                // toProto() would no longer match the signature. createdAtMs covers it.
                 .setAccuracy(location.accuracy)
                 .build()
         }
@@ -64,4 +67,17 @@ object SosFactory {
     private fun randomId(): ByteArray {
         return ByteArray(16).also { SecureRandom().nextBytes(it) }
     }
+}
+
+internal const val MAX_PAYLOAD_TEXT_BYTES = 220
+
+/** Cuts the string so its UTF-8 encoding fits [maxBytes] without splitting a character. */
+internal fun String.truncateUtf8(maxBytes: Int): String {
+    if (encodeToByteArray().size <= maxBytes) return this
+    var end = length
+    while (end > 0 && substring(0, end).encodeToByteArray().size > maxBytes) {
+        end--
+        if (end > 0 && this[end - 1].isHighSurrogate()) end--
+    }
+    return substring(0, end)
 }

@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedDeque
 
 class GattClient(
     context: Context,
@@ -31,20 +33,22 @@ class GattClient(
     private val identityProvider: com.rescuemesh.app.identity.NodeIdentityProvider,
 ) {
     private val appContext = context.applicationContext
-    private val connections = mutableMapOf<String, BluetoothGatt>()
-    private val backoffUntilElapsedMs = mutableMapOf<String, Long>()
-    private val sentMessageKeys = mutableSetOf<String>()
-    private val peerNodeIdsByAddress = mutableMapOf<String, ByteArray>()
-    private val peerRolesByAddress = mutableMapOf<String, com.rescuemesh.app.protocol.NodeRole>()
-    
+    // Concurrent collections: GATT callbacks arrive on binder threads and the watchdog on IO,
+    // while the coordinator iterates these from the main thread.
+    private val connections = ConcurrentHashMap<String, BluetoothGatt>()
+    private val backoffUntilElapsedMs = ConcurrentHashMap<String, Long>()
+    private val sentMessageKeys: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val peerNodeIdsByAddress = ConcurrentHashMap<String, ByteArray>()
+    private val peerRolesByAddress = ConcurrentHashMap<String, com.rescuemesh.app.protocol.NodeRole>()
+
     // Per-device write queue to avoid GATT busy errors
-    private val writeQueues = mutableMapOf<String, ArrayDeque<GattWriteOperation>>()
-    private val isWriting = mutableMapOf<String, Boolean>()
-    private val writingMessageKeys = mutableMapOf<String, String>()
-    
+    private val writeQueues = ConcurrentHashMap<String, ConcurrentLinkedDeque<GattWriteOperation>>()
+    private val isWriting = ConcurrentHashMap<String, Boolean>()
+    private val writingMessageKeys = ConcurrentHashMap<String, String>()
+
     // Connection watchdog tracking
-    private val watchdogJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
-    private val serviceDiscoveryStarted = mutableSetOf<String>()
+    private val watchdogJobs = ConcurrentHashMap<String, kotlinx.coroutines.Job>()
+    private val serviceDiscoveryStarted: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     private val _events = MutableSharedFlow<BleTransportEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<BleTransportEvent> = _events
@@ -80,7 +84,11 @@ class GattClient(
             callback, 
             BluetoothDevice.TRANSPORT_LE,
             BluetoothDevice.PHY_LE_1M_MASK
-        )
+        ) ?: run {
+            // connectGatt returns null when the stack is unavailable (e.g. Bluetooth toggled off).
+            Log.w("GATT_CLIENT", "connectGatt returned null for $key")
+            return
+        }
         connections[key] = gatt
         startWatchdog(key, gatt)
     }
@@ -120,7 +128,7 @@ class GattClient(
     @SuppressLint("MissingPermission")
     private fun enqueueWrite(gatt: BluetoothGatt, op: GattWriteOperation) {
         val address = gatt.device.address
-        val queue = writeQueues.getOrPut(address) { ArrayDeque() }
+        val queue = writeQueues.getOrPut(address) { ConcurrentLinkedDeque() }
         queue.addLast(op)
         processNextWrite(gatt)
     }
@@ -131,9 +139,7 @@ class GattClient(
         if (isWriting[address] == true) return
         
         val queue = writeQueues[address] ?: return
-        if (queue.isEmpty()) return
-        
-        val next = queue.removeFirst()
+        val next = queue.pollFirst() ?: return
         isWriting[address] = true
         if (next is GattWriteOperation.Characteristic) {
             next.messageKey?.let { writingMessageKeys[address] = it }

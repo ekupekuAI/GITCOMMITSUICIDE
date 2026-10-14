@@ -75,7 +75,7 @@ class BleScanner(
             .setServiceUuid(BleConstants.MeshServiceParcelUuid)
             .build()
         val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY) // High performance
+            .setScanMode(MeshConfig.getScanMode(powerMode))
             .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
             .setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
             .setNumOfMatches(ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT)

@@ -63,7 +63,7 @@ class BleAdvertiser(
         }
 
         val settings = AdvertiseSettings.Builder()
-            .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY) // High frequency
+            .setAdvertiseMode(MeshConfig.getAdvertiseMode(powerMode))
             .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH) // Max range for emergency
             .setConnectable(true)
             .setTimeout(0) // Run until stopped

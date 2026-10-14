@@ -17,7 +17,7 @@ class PerformanceTracker {
 
     fun recordConnection(success: Boolean) {
         _stats.update { 
-            if (success) it.copy(successfulConnections = it.totalConnections + 1, totalConnections = it.totalConnections + 1)
+            if (success) it.copy(successfulConnections = it.successfulConnections + 1, totalConnections = it.totalConnections + 1)
             else it.copy(totalConnections = it.totalConnections + 1)
         }
     }
